@@ -1,0 +1,477 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWTexture2D<float4> Result;
+float4x4 _CameraToWorld;
+float4x4 _CameraInverseProjection;
+float4 _DirectionalLight;
+float2 _PixelOffset;
+float _SkyboxTexFactor;
+
+//Skybox Texture
+Texture2D<float4> _SkyboxTex;
+SamplerState sampler_SkyboxTex;
+
+//Constants
+static const float PI = 3.14159265f;
+static const float EPSILON = 0.00001f;
+static const float SDF_DIST = .01;
+static const float RAYMARCH_STEPS = 250;
+static const float MAX_DIST = 50.0;
+
+//randomness
+float2 _CurPixel;
+float _Seed;
+
+struct Ray
+{
+  float3 origin;
+  float3 direction;
+	float3 energy;
+};
+
+struct RaytraceMaterial
+{
+	float3 albedo;
+	float3 specular;
+	float smoothness;
+	float emission;
+};
+
+struct RayHit
+{
+	float3 position;
+	double distance;
+	float3 normal;
+	RaytraceMaterial mat;
+};
+
+struct Sphere
+{
+  float3 position;
+  float radius;
+	RaytraceMaterial mat;
+};
+
+struct Triangle
+{
+    float3 v1, v2, v3;
+    float3 normal; //flat shading will do for now, smooth shading requires vertex normals to be passed
+	RaytraceMaterial mat;
+};
+
+float rand()
+{
+	float result = frac(sin(_Seed / 100.0f * dot(_CurPixel, float2(12.9898f, 78.233f))) * 43758.5453f);
+	_Seed += 1.0f;
+	return result;
+}
+
+float sdot(float3 i, float3 o, float f = 1.0f)
+{
+	return saturate(dot(i, o) * f);
+}
+
+//Structured Buffers
+StructuredBuffer<Sphere> _Spheres;
+StructuredBuffer<Triangle> _Triangles;
+
+Ray CreateRay(float3 origin, float3 direction)
+{
+    Ray ray;
+    ray.origin = origin;
+    ray.direction = direction;
+    ray.energy = float3(1.0f, 1.0f, 1.0f);
+    return ray;
+}
+
+Ray CreateCameraRay(float2 uv)
+{
+//transform camera origin in world space
+    float3 origin = mul(_CameraToWorld, float4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
+    
+// Invert the perspective projection of the view-space position
+    float3 direction = mul(_CameraInverseProjection, float4(uv, 0.0f, 1.0f)).xyz;
+
+// Transform the direction from camera to world space and normalize
+    direction = mul(_CameraToWorld, float4(direction, 0.0f)).xyz;
+    direction = normalize(direction);
+
+    return CreateRay(origin, direction);
+}
+
+RaytraceMaterial CreateMaterial()
+{
+	RaytraceMaterial mat;
+	mat.albedo = float3(0.4f, 0.4f, 0.4f);
+	mat.specular = float3(0.8f, 0.8f, 0.8f);
+	mat.smoothness = 0.5f;
+	mat.emission = 0.0f;
+
+	return mat;
+}
+
+RayHit CreateRayHit()
+{
+    RayHit hit;
+    hit.position = float3(0.0f, 0.0f, 0.0f);
+    hit.distance = 1.#INF;
+    hit.normal = float3(0.0f, 0.0f, 0.0f);
+	  hit.mat = CreateMaterial();
+
+    return hit;
+}
+
+Triangle CreateTriangle()
+{
+    Triangle t;
+	  t.mat = CreateMaterial();
+    t.v1 = float3(1.0f, 1.0f, 3.0f);
+    t.v2 = float3(0.0f, 3.0f, 3.0f);
+    t.v3 = float3(-1.0f, 1.0f, 3.0f);
+    t.normal = float3(0.0f, 0.0f, -1.0f);
+
+    return t;
+}
+
+float3x3 GetTangentSpace(float3 normal)
+{
+	//choose helper vector based on axis alignment
+	float3 axisHelper = float3(1, 0, 0);
+	if (abs(normal.x) > 0.99f) axisHelper = float3(0, 0, 1);
+
+	//Generate tangent vectors
+	float3 tangent = normalize(cross(normal, axisHelper));
+	float3 binormal = normalize(cross(normal, tangent));
+
+	return float3x3(tangent, binormal, normal);
+}
+
+float3 SampleHemisphere(float3 normal, float alpha)
+{
+	// Sample hemisphere direction, alpha factor decides kind of sampling
+	float cosTheta = pow(rand(), 1.0f / (alpha + 1.0f));
+	float sinTheta = sqrt(1.0f - cosTheta * cosTheta);
+	float phi = 2 * PI * rand();
+	float3 tangentSpaceDir = float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+
+	// Transform direction to world space
+	return mul(tangentSpaceDir, GetTangentSpace(normal));
+}
+
+float energy(float3 color)
+{
+	return dot(color, 1.0f / 3.0f);
+}
+
+float SmoothnessToPhongAlpha(float smoothness)
+{
+	return pow(1000.0f, smoothness * smoothness);
+}
+
+void IntersectGroundPlane(Ray ray, inout RayHit bestHit)
+{
+//calculate groundplane hit distance
+    float t = -ray.origin.y / ray.direction.y;
+
+    if (t > 0 && t < bestHit.distance)
+    {
+      bestHit.distance = t;
+      bestHit.position = ray.origin + t * ray.direction;
+      bestHit.normal = float3(0.0f, 1.0f, 0.0f);
+      bestHit.mat.albedo = float3(0.4f, 0.4f, 0.4f);
+      bestHit.mat.specular = float3(0.1f, 0.1f, 0.1f);
+		  bestHit.mat.smoothness = 0.5f;
+		  bestHit.mat.emission = 0.0f;
+    }
+}
+
+void IntersectSphere(Ray ray, inout RayHit bestHit, Sphere sphere)
+{
+    // Calculate distance along the ray where the sphere is intersected
+    float3 d = ray.origin - sphere.position;
+    float p1 = -dot(ray.direction, d);
+    float p2sqr = p1 * p1 - dot(d, d) + sphere.radius * sphere.radius;
+    if (p2sqr < 0)
+	    return;
+    float p2 = sqrt(p2sqr);
+    float t = p1 - p2 > 0 ? p1 - p2 : p1 + p2;
+
+    if (t > 0 && t < bestHit.distance)
+    {
+	    bestHit.distance = t;
+	    bestHit.position = ray.origin + t * ray.direction;
+	    bestHit.normal = normalize(bestHit.position - sphere.position);
+        bestHit.mat.albedo = sphere.mat.albedo;
+        bestHit.mat.specular = sphere.mat.specular;
+		bestHit.mat.smoothness = sphere.mat.smoothness;
+		bestHit.mat.emission = sphere.mat.emission;
+    }
+}
+
+void IntersectTriangle(Ray ray, inout RayHit bestHit, Triangle tri)
+{
+   //algorithm used:  http://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
+
+    float3 e1 = tri.v2 - tri.v1;
+    float3 e2 = tri.v3 - tri.v1;
+    float3 p = cross(ray.direction, e2); 
+    double det = dot(e1, p); 
+    if (det > -EPSILON && det < EPSILON)
+        return;
+        
+    double inv_det = 1.f / det;
+    float3 t = ray.origin - tri.v1;
+
+    double u = (dot(t, p) * inv_det); 
+    if (u < 0.f || u > 1.f)
+        return;
+
+    float3 q = cross(t, e1);
+    double v = dot(ray.direction, q) * inv_det;
+    if (v < 0.f || (u + v) > 1.f)
+        return;
+
+    double dist = dot(e2, q) * inv_det; 
+    if (dist > EPSILON && dist < bestHit.distance)
+    {
+      bestHit.distance = dist;
+      bestHit.normal = tri.normal;
+      bestHit.position = ray.origin - ray.direction * bestHit.distance; //implicit conversion double -> float happening here!
+      bestHit.mat.albedo = tri.mat.albedo;
+      bestHit.mat.specular = tri.mat.specular;
+		  bestHit.mat.smoothness = tri.mat.smoothness;
+		  bestHit.mat.emission = tri.mat.emission;
+    }
+}
+
+RayHit Trace(Ray ray)
+{
+    RayHit bestHit = CreateRayHit();
+
+    //intersect ground plane
+    IntersectGroundPlane(ray, bestHit);
+
+    //intersect debug triangle
+    //Triangle t = CreateTriangle();
+    //IntersectTriangle(ray, bestHit, t);
+
+    //intersect spheres
+    uint numSpheres, strideSpheres;
+    _Spheres.GetDimensions(numSpheres, strideSpheres);
+    for (uint i = 0; i < numSpheres; i++)
+    {
+       IntersectSphere(ray, bestHit, _Spheres[i]);
+    }
+
+    //intersect triangles
+    /*uint numTriangles, strideTriangles;
+    _Triangles.GetDimensions(numTriangles, strideTriangles);
+    for (uint j = 0; j < numTriangles; j++)
+    {
+       IntersectTriangle(ray, bestHit, _Triangles[j]);
+    }*/
+
+    return bestHit;
+}
+
+float3 Shade(inout Ray ray, RayHit hit)
+{
+    if (hit.distance < 1.#INF)
+    {
+      float3 specular = hit.mat.specular;
+      float3 albedo = hit.mat.albedo;
+
+		  // Reflect the ray and multiply energy with specular reflection
+      //ray.origin = hit.position + hit.normal * 0.001f;
+        
+		  //witted phong
+		  //ray.direction = reflect(ray.direction, hit.normal);
+		  //ray.energy *= specular;
+
+		  //// Shadow test ray
+		  //bool shadow = false;
+		  //Ray shadowRay = CreateRay(hit.position + hit.normal * 0.001f, -1 * _DirectionalLight.xyz);
+		  //RayHit shadowHit = Trace(shadowRay);
+		  //if (shadowHit.distance != 1.#INF)
+		  //{
+		  //	return float3(0.0f, 0.0f, 0.0f);
+		  //}
+
+		  //// Return a diffuse-shaded color
+		  //return saturate(dot(hit.normal, _DirectionalLight.xyz) * -1) * _DirectionalLight.w * albedo;
+
+		  //pathtraced lambert + phong, optimized sampling
+		  albedo = min(1.0f - specular, albedo);
+		  float specularChance = energy(specular);
+		  float diffuseChance = energy(albedo);
+		  float sum = specularChance + diffuseChance;
+		  specularChance /= sum;
+		  diffuseChance /= sum;
+
+		  //Roulette select raypath
+		  float roulette = rand();
+		  if (roulette < specularChance)
+		  {
+			  //specular reflection
+			  float alpha = SmoothnessToPhongAlpha(hit.mat.smoothness);
+			  ray.origin = hit.position + hit.normal * 0.001f;
+			  ray.direction = SampleHemisphere(reflect(ray.direction, hit.normal), alpha);
+			  float f = (alpha + 2) / (alpha + 1);
+			  ray.energy *= (1.0f / specularChance) * specular * sdot(hit.normal, ray.direction, f);
+		  }
+		  else
+		  {
+			  //diffuse reflection
+			  ray.origin = hit.position + hit.normal * 0.001f;
+			  ray.direction = SampleHemisphere(hit.normal, 1.0f);
+			  ray.energy *= (1.0f / diffuseChance) * albedo;
+		  }
+		
+		return hit.mat.emission;
+
+    }
+    else
+    {
+        // Erase the ray's energy - the sky doesn't reflect anything
+        ray.energy = 0.0f;
+		    
+        // Write texture samples
+        // https://en.wikipedia.org/wiki/Spherical_coordinate_system#Coordinate_system_conversions
+        float theta = acos(ray.direction.y) / -PI;
+        float phi = atan2(ray.direction.x, -ray.direction.z) / -PI * 0.5f;
+        return _SkyboxTex.SampleLevel(sampler_SkyboxTex, float2(phi, theta), 0).xyz * _SkyboxTexFactor;
+	  }
+}
+
+// ---------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------
+
+float opUnion(float d1, float d2)
+{
+  return min(d1, d2);
+}
+
+float opSmoothUnion(float d1, float d2, float k)
+{
+  float h = max(k - abs(d1 - d2), 0.0);
+  return min(d1, d2) - h * h*0.25 / k;
+  //float h = clamp( 0.5 + 0.5*(d2-d1)/k, 0.0, 1.0 );
+  //return mix( d2, d1, h ) - k*h*(1.0-h);
+}
+
+float GetMinSceneDistanceFromPoint(float3 p) {
+  //define sphere here for now float4(position.xyz, radius)
+  float4 sphere = float4(0.0, 1.0, 6.0, 1.0);
+  float4 sphere_2 = float4(2.0, 1.0, 6.0, 0.4);
+  float plane_y = -0.0;
+
+  // get distance from point to sphere
+  // return opUnion(length(point - sphere.xyz) - sphere.w, point.y + plane_y); // no blending
+  return opSmoothUnion(opSmoothUnion(length(p - sphere.xyz) - sphere.w, p.y + plane_y, 0.5), length(p - sphere_2.xyz) - sphere_2.w, 0.5); // blending
+}
+
+float Raymarch(Ray r)
+{
+  float dist_0 = 0.0; //distance from origin
+
+  // main raymarch loop
+  for (int i = 0; i < RAYMARCH_STEPS; i++) {
+
+    // march ray from origin in direction
+    float3 t = r.origin + r.direction * dist_0;
+
+    // get distance
+    float d = GetMinSceneDistanceFromPoint(t);
+
+    //advance/march along ray - spheretracing
+    dist_0 += d;
+
+    //compute sdf
+    if (dist_0 > MAX_DIST || d < SDF_DIST) {
+      // found a hit
+      return dist_0;
+    }
+  }
+
+  return MAX_DIST;
+}
+
+float calcShading(float3 p)
+{
+  // light source
+  float3 light_position = float3(-5.0, 5.0, 2.0);
+
+  // light direction
+  float3 light_dir = normalize(light_position - p);
+
+  // calculate hitpoint normal (gradient of sdf at p)
+  float dist = GetMinSceneDistanceFromPoint(p);
+  float2 epsilon = float2(0.01, 0);
+  float3 normal = normalize(dist - float3(GetMinSceneDistanceFromPoint(p - epsilon.xyy),
+    GetMinSceneDistanceFromPoint(p - epsilon.yxy),
+    GetMinSceneDistanceFromPoint(p - epsilon.yyx)));
+
+  // calculate diffuse contribution
+  float diffuse_contrib = clamp(dot(normal, light_dir), 0.0, 1.0);
+
+  // calculate shadow rays
+  Ray shadowray;
+  shadowray.origin = p + normal * SDF_DIST * 2.0;
+  shadowray.direction = light_dir;
+  float shadow_fac = Raymarch(shadowray);
+
+  // in shadow
+  if (shadow_fac < length(light_position - p)) diffuse_contrib *= 0.5;
+
+  return diffuse_contrib;
+}
+
+[numthreads(8, 8, 1)]
+void CSMain(uint3 id : SV_DispatchThreadID)
+{
+
+	//initialize current pixel for randomness
+	_CurPixel = id.xy;
+
+	// Get the dimensions of the RenderTexture
+  uint width, height;
+  Result.GetDimensions(width, height);
+
+	// Transform pixel to [-1,1] range
+  float2 uv = float2((id.xy + _PixelOffset) / float2(width, height) * 2.0f - 1.0f);
+
+	// Get a ray for the UVs
+  Ray ray = CreateCameraRay(uv);
+
+	//Trace and Shade
+  float3 result = float3(0, 0, 0);
+  /*for (int i = 0; i < 8; i++)
+  {
+      RayHit hit = Trace(ray);
+      result += ray.energy * Shade(ray, hit);
+      if (!any(ray.energy))
+          break;
+  }*/
+
+  // raymarching
+  float m = Raymarch(ray);
+
+  if (m < MAX_DIST) {
+    // calculate hit point
+    float3 hitpoint = ray.origin + ray.direction * m;
+
+    // shade point
+    float diffuse = calcShading(hitpoint);
+    result = float3(diffuse, diffuse, diffuse);
+  }
+  else
+  {
+    // background
+    result = float3(uv.xy, 1.0);
+  }
+
+  Result[id.xy] = float4(result, 1);
+}
