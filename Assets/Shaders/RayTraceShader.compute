@@ -62,6 +62,13 @@ struct Triangle
 	RaytraceMaterial mat;
 };
 
+struct SDF
+{
+  float3 pos, rot, scale;
+
+  // TODO more to come
+};
+
 float rand()
 {
 	float result = frac(sin(_Seed / 100.0f * dot(_CurPixel, float2(12.9898f, 78.233f))) * 43758.5453f);
@@ -77,6 +84,7 @@ float sdot(float3 i, float3 o, float f = 1.0f)
 //Structured Buffers
 StructuredBuffer<Sphere> _Spheres;
 StructuredBuffer<Triangle> _Triangles;
+StructuredBuffer<SDF> _SDFs;
 
 Ray CreateRay(float3 origin, float3 direction)
 {
@@ -117,7 +125,8 @@ RayHit CreateRayHit()
 {
     RayHit hit;
     hit.position = float3(0.0f, 0.0f, 0.0f);
-    hit.distance = 1.#INF;
+    //hit.distance = 1.#INF;
+    hit.distance = 1000000;
     hit.normal = float3(0.0f, 0.0f, 0.0f);
 	  hit.mat = CreateMaterial();
 
@@ -279,7 +288,8 @@ RayHit Trace(Ray ray)
 
 float3 Shade(inout Ray ray, RayHit hit)
 {
-    if (hit.distance < 1.#INF)
+    if (hit.distance < 1000000)
+    //if (hit.distance < 1.#INF)
     {
       float3 specular = hit.mat.specular;
       float3 albedo = hit.mat.albedo;
@@ -366,11 +376,13 @@ float GetMinSceneDistanceFromPoint(float3 p) {
   //define sphere here for now float4(position.xyz, radius)
   float4 sphere = float4(0.0, 1.0, 6.0, 1.0);
   float4 sphere_2 = float4(2.0, 1.0, 6.0, 0.4);
+  float4 scene_sphere = float4(_SDFs[0].pos, 1.0); // TODO
   float plane_y = -0.0;
 
   // get distance from point to sphere
   // return opUnion(length(point - sphere.xyz) - sphere.w, point.y + plane_y); // no blending
-  return opSmoothUnion(opSmoothUnion(length(p - sphere.xyz) - sphere.w, p.y + plane_y, 0.5), length(p - sphere_2.xyz) - sphere_2.w, 0.5); // blending
+  // TODO
+  return opSmoothUnion(opSmoothUnion(length(p - sphere.xyz) - sphere.w, p.y + plane_y, 0.5), length(p - scene_sphere.xyz) - scene_sphere.w, 0.5); // blending
 }
 
 float Raymarch(Ray r)

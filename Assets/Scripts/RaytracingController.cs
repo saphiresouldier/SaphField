@@ -2,21 +2,28 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public struct Sphere
+public struct Sphere // 48
 {
     public Vector3 position;
     public float radius;
     public RaytraceMaterial material;
 };
 
-public struct Triangle
+public struct Triangle // 80
 {
     public Vector3 v1, v2, v3;
     public Vector3 normal; //flat shading will do for now
     public RaytraceMaterial material;
 };
 
-public struct RaytraceMaterial
+public struct SDF // 36
+{
+    public Vector3 pos, rot, scale;
+
+    // more coming soon
+}
+
+public struct RaytraceMaterial // 32
 {
     public Vector3 albedo;
     public Vector3 specular;
@@ -46,6 +53,7 @@ public class RaytracingController : MonoBehaviour {
 
     private ComputeBuffer _sphereBuffer;
     private ComputeBuffer _triangleBuffer;
+    private ComputeBuffer _sdfBuffer;
 
     public float SkyboxMultiplicator
     {
@@ -68,18 +76,25 @@ public class RaytracingController : MonoBehaviour {
         _currentSample = 0;
         SetupSphereScene();
         SetupTriangleScene();
+        SetupSDFScene();
     }
 
     private void OnDisable()
     {
         _sphereBuffer.Release();
         _triangleBuffer.Release();
+        _sdfBuffer.Release();
     }
 
     private void Update()
     {
         DetectTransformChanged(Camera.transform);
         DetectTransformChanged(DirectionalLight.transform);
+        foreach(SDF_Object s in GetSceneSDF.Instance.GetSceneSDFs())
+        {
+            DetectTransformChanged(s.transform); //TODO
+            SetupSDFScene();
+        }
     }
 
     private void DetectTransformChanged(Transform t)
@@ -135,6 +150,35 @@ public class RaytracingController : MonoBehaviour {
         _sphereBuffer.SetData(spheres);
     }
 
+    private void SetupSDFScene()
+    {
+        List<SDF> sdfs = GetSceneSDFs();
+        Debug.Log("Got transforms from SDF_Objects, transforms contains " + sdfs.Count + " sdfs!");
+
+        // Assign to compute buffer, 36 is byte size of triangle struct in memory
+        _sdfBuffer = new ComputeBuffer(sdfs.Count, 36);
+        _sdfBuffer.SetData(sdfs);
+    }
+
+    private List<SDF> GetSceneSDFs()
+    {
+        List<SDF> sdfs = new List<SDF>();
+
+        var sdf_objects  = GetSceneSDF.Instance.GetSceneSDFs();
+
+        for(int i = 0; i < sdf_objects.Length; i++)
+        {
+            SDF sdf = new SDF();
+            sdf.pos = sdf_objects[i].transform.position;
+            sdf.rot = sdf_objects[i].transform.rotation.eulerAngles;
+            sdf.scale = sdf_objects[i].transform.localScale;
+
+            sdfs.Add(sdf);
+        }
+
+        return sdfs;
+    }
+
     private void SetupTriangleScene()
     {
         List<Triangle> tris = GetSceneTriangles(false);
@@ -174,7 +218,7 @@ public class RaytracingController : MonoBehaviour {
                 triangles.Add(tri);
             }
         }
-        else //Get actual Unity scene triangles
+        else // Get actual Unity scene triangles
         {
             triangles = GetSceneMeshes.Instance.GetSceneTriangles();
         }
@@ -208,6 +252,7 @@ public class RaytracingController : MonoBehaviour {
         RayTraceShader.SetVector("_DirectionalLight", new Vector4(l.x, l.y, l.z, DirectionalLight.intensity));
         RayTraceShader.SetBuffer(0, "_Spheres", _sphereBuffer);
         RayTraceShader.SetBuffer(0, "_Triangles", _triangleBuffer);
+        RayTraceShader.SetBuffer(0, "_SDFs", _sdfBuffer);
     }
 
     private void Render(RenderTexture dest)
@@ -229,7 +274,6 @@ public class RaytracingController : MonoBehaviour {
         Graphics.Blit(_targetTex, _convergingTex, _addMaterial);
         Graphics.Blit(_convergingTex, dest);
         _currentSample++;
-        //Graphics.Blit(_targetTex, dest);
     }
 
     private void InitRenderTexture()
