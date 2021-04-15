@@ -15,4 +15,9 @@ public class SDF_Object : MonoBehaviour
     {
         
     }
+
+    private void OnEnable()
+    {
+        GetSceneSDF.Instance.UpdateScene();
+    }
 }

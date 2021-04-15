@@ -376,13 +376,23 @@ float GetMinSceneDistanceFromPoint(float3 p) {
   //define sphere here for now float4(position.xyz, radius)
   float4 sphere = float4(0.0, 1.0, 6.0, 1.0);
   float4 sphere_2 = float4(2.0, 1.0, 6.0, 0.4);
-  float4 scene_sphere = float4(_SDFs[0].pos, 1.0); // TODO
   float plane_y = -0.0;
 
   // get distance from point to sphere
   // return opUnion(length(point - sphere.xyz) - sphere.w, point.y + plane_y); // no blending
   // TODO
-  return opSmoothUnion(opSmoothUnion(length(p - sphere.xyz) - sphere.w, p.y + plane_y, 0.5), length(p - scene_sphere.xyz) - scene_sphere.w, 0.5); // blending
+  float dist = opSmoothUnion(length(p - sphere.xyz) - sphere.w, p.y + plane_y, 0.5); // hardcoded base
+
+  uint numSDFs, strideSDFs;
+  _SDFs.GetDimensions(numSDFs, strideSDFs);
+  for( uint i = 0; i < numSDFs; i++)
+  {
+    float d = opSmoothUnion(length(p - _SDFs[i].pos) - 0.5, dist, 0.5); // TODO
+    if (d < dist) dist = d;
+  }
+
+  return dist;
+  // return opSmoothUnion(opSmoothUnion(length(p - sphere.xyz) - sphere.w, p.y + plane_y, 0.5), length(p - scene_sphere.xyz) - scene_sphere.w, 0.5); // blending
 }
 
 float Raymarch(Ray r)

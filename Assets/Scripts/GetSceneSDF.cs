@@ -20,6 +20,11 @@ public class GetSceneSDF : Singleton<GetSceneSDF> {
 		
 	}
 
+    public void UpdateScene()
+    {
+        _sceneTransforms = GetSDFsCurrentScene();
+    }
+
     public SDF_Object[] GetSceneSDFs()
     {
         return _sdfs;

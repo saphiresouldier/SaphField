@@ -90,7 +90,7 @@ public class RaytracingController : MonoBehaviour {
     {
         DetectTransformChanged(Camera.transform);
         DetectTransformChanged(DirectionalLight.transform);
-        foreach(SDF_Object s in GetSceneSDF.Instance.GetSceneSDFs())
+        foreach (SDF_Object s in GetSceneSDF.Instance.GetSceneSDFs())
         {
             DetectTransformChanged(s.transform); //TODO
             SetupSDFScene();
@@ -102,6 +102,7 @@ public class RaytracingController : MonoBehaviour {
         if(t.hasChanged)
         {
             RestartSampling();
+            //SetupSDFScene();
             t.hasChanged = false;
         }
     }
