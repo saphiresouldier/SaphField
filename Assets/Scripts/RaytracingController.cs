@@ -1,4 +1,4 @@
-﻿using System.Collections;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -31,6 +31,14 @@ public struct RaytraceMaterial // 32
     public float emission;
 };
 
+[Flags]
+public enum UPDATEFLAGS
+{
+    NONE = 0,
+    RESTART_SAMPLING = 1,
+    REBUILD_SCENE = 2
+}
+
 public class RaytracingController : MonoBehaviour {
 
     public ComputeShader RayTraceShader;
@@ -55,6 +63,8 @@ public class RaytracingController : MonoBehaviour {
     private ComputeBuffer _triangleBuffer;
     private ComputeBuffer _sdfBuffer;
 
+    private UPDATEFLAGS updateFlags = 0;
+
     public float SkyboxMultiplicator
     {
         get { return _skyboxMultiplicator; }
@@ -68,7 +78,7 @@ public class RaytracingController : MonoBehaviour {
     {
         if (Camera == null) Camera = Camera.main;
 
-        Random.InitState(RandomSeed); 
+        UnityEngine.Random.InitState(RandomSeed); 
     }
 
     private void OnEnable()
@@ -92,17 +102,29 @@ public class RaytracingController : MonoBehaviour {
         DetectTransformChanged(DirectionalLight.transform);
         foreach (SDF_Object s in GetSceneSDF.Instance.GetSceneSDFs())
         {
-            DetectTransformChanged(s.transform); //TODO
+            DetectTransformChanged(s.transform, true); //TODO: optimize
+        }
+
+        if(updateFlags.HasFlag(UPDATEFLAGS.REBUILD_SCENE))
+        {
             SetupSDFScene();
+            RestartSampling();
+            updateFlags &= (~UPDATEFLAGS.REBUILD_SCENE);
+            updateFlags &= (~UPDATEFLAGS.RESTART_SAMPLING);
+        }
+        else if (updateFlags.HasFlag(UPDATEFLAGS.RESTART_SAMPLING))
+        {
+            RestartSampling();
+            updateFlags &= (~UPDATEFLAGS.RESTART_SAMPLING);
         }
     }
 
-    private void DetectTransformChanged(Transform t)
+    private void DetectTransformChanged(Transform t, bool rebuildScene = false)
     {
         if(t.hasChanged)
         {
-            RestartSampling();
-            //SetupSDFScene();
+            if (rebuildScene) updateFlags |= UPDATEFLAGS.REBUILD_SCENE;
+            else updateFlags |= UPDATEFLAGS.RESTART_SAMPLING;
             t.hasChanged = false;
         }
     }
@@ -117,8 +139,8 @@ public class RaytracingController : MonoBehaviour {
             sphere.material = new RaytraceMaterial();
 
             // Radius and radius
-            sphere.radius = SphereRadius.x + Random.value * (SphereRadius.y - SphereRadius.x);
-            Vector2 randomPos = Random.insideUnitCircle * SpherePlacementRadius;
+            sphere.radius = SphereRadius.x + UnityEngine.Random.value * (SphereRadius.y - SphereRadius.x);
+            Vector2 randomPos = UnityEngine.Random.insideUnitCircle * SpherePlacementRadius;
             sphere.position = new Vector3(randomPos.x, sphere.radius, randomPos.y);
 
             // Reject spheres that are intersecting others
@@ -132,12 +154,12 @@ public class RaytracingController : MonoBehaviour {
                     
             }
             // Albedo and specular color
-            Color color = Random.ColorHSV();
-            bool metal = Random.value < 0.5f;
-            bool emissive = Random.value < 0.2f; //TODO: optimization potential, skip metal computation of emissive
+            Color color = UnityEngine.Random.ColorHSV();
+            bool metal = UnityEngine.Random.value < 0.5f;
+            bool emissive = UnityEngine.Random.value < 0.2f; //TODO: optimization potential, skip metal computation of emissive
             sphere.material.albedo = metal ? Vector3.zero : new Vector3(color.r, color.g, color.b);
             sphere.material.specular = metal ? new Vector3(color.r, color.g, color.b) : Vector3.one * 0.04f;
-            sphere.material.smoothness = Random.value;
+            sphere.material.smoothness = UnityEngine.Random.value;
             sphere.material.emission = emissive ? 1.0f : 0.0f;
 
             // Add the sphere to the list
@@ -154,7 +176,7 @@ public class RaytracingController : MonoBehaviour {
     private void SetupSDFScene()
     {
         List<SDF> sdfs = GetSceneSDFs();
-        Debug.Log("Got transforms from SDF_Objects, transforms contains " + sdfs.Count + " sdfs!");
+        //Debug.Log("Got transforms from SDF_Objects, transforms contains " + sdfs.Count + " sdfs!");
 
         // Assign to compute buffer, 36 is byte size of triangle struct in memory
         _sdfBuffer = new ComputeBuffer(sdfs.Count, 36);
@@ -201,17 +223,17 @@ public class RaytracingController : MonoBehaviour {
             {
                 Triangle tri = new Triangle();
                 tri.material = new RaytraceMaterial();
-                float radius = SphereRadius.x + Random.value * (SphereRadius.y - SphereRadius.x);
-                Vector2 randomPos = Random.insideUnitCircle * SpherePlacementRadius;
+                float radius = SphereRadius.x + UnityEngine.Random.value * (SphereRadius.y - SphereRadius.x);
+                Vector2 randomPos = UnityEngine.Random.insideUnitCircle * SpherePlacementRadius;
                 Vector3 position = new Vector3(randomPos.x, radius, randomPos.y);
-                tri.v1 = Random.onUnitSphere * radius + position;
-                tri.v2 = Random.onUnitSphere * radius + position;
-                tri.v3 = Random.onUnitSphere * radius + position;
+                tri.v1 = UnityEngine.Random.onUnitSphere * radius + position;
+                tri.v2 = UnityEngine.Random.onUnitSphere * radius + position;
+                tri.v3 = UnityEngine.Random.onUnitSphere * radius + position;
                 tri.normal = ComputeTriangleNormal(tri.v1, tri.v2, tri.v3);
 
                 // Albedo and specular color
-                Color color = Random.ColorHSV();
-                bool metal = Random.value < 0.0f; //TODO
+                Color color = UnityEngine.Random.ColorHSV();
+                bool metal = UnityEngine.Random.value < 0.0f; //TODO
                 tri.material.albedo = metal ? Vector3.zero : new Vector3(color.r, color.g, color.b);
                 tri.material.specular = metal ? new Vector3(color.r, color.g, color.b) : Vector3.one * 0.04f;
 
@@ -247,8 +269,8 @@ public class RaytracingController : MonoBehaviour {
         RayTraceShader.SetMatrix("_CameraInverseProjection", Camera.projectionMatrix.inverse);
         RayTraceShader.SetTexture(0, "_SkyboxTex", SkyboxTex);
         RayTraceShader.SetFloat("_SkyboxTexFactor", _skyboxMultiplicator);
-        RayTraceShader.SetFloat("_Seed", Random.value);
-        RayTraceShader.SetVector("_PixelOffset", new Vector2(Random.value, Random.value));
+        RayTraceShader.SetFloat("_Seed", UnityEngine.Random.value);
+        RayTraceShader.SetVector("_PixelOffset", new Vector2(UnityEngine.Random.value, UnityEngine.Random.value));
         Vector3 l = DirectionalLight.transform.forward;
         RayTraceShader.SetVector("_DirectionalLight", new Vector4(l.x, l.y, l.z, DirectionalLight.intensity));
         RayTraceShader.SetBuffer(0, "_Spheres", _sphereBuffer);
