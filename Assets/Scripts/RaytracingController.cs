@@ -6,14 +6,14 @@ public struct Sphere // 48
 {
     public Vector3 position;
     public float radius;
-    public RaytraceMaterial material;
+    public RayMarchMaterial material;
 };
 
 public struct Triangle // 80
 {
     public Vector3 v1, v2, v3;
     public Vector3 normal; //flat shading will do for now
-    public RaytraceMaterial material;
+    public RayMarchMaterial material;
 };
 
 public struct SDF // 36
@@ -23,7 +23,7 @@ public struct SDF // 36
     // more coming soon
 }
 
-public struct RaytraceMaterial // 32
+public struct RayMarchMaterial // 32
 {
     public Vector3 albedo;
     public Vector3 specular;
@@ -70,7 +70,7 @@ public class RaytracingController : MonoBehaviour {
         get { return _skyboxMultiplicator; }
         set {
             _skyboxMultiplicator = value;
-            RestartSampling();
+            updateFlags |= UPDATEFLAGS.RESTART_SAMPLING;
         }
     }
 
@@ -84,15 +84,15 @@ public class RaytracingController : MonoBehaviour {
     private void OnEnable()
     {
         _currentSample = 0;
-        SetupSphereScene();
-        SetupTriangleScene();
+        //SetupSphereScene();
+        //SetupTriangleScene();
         SetupSDFScene();
     }
 
     private void OnDisable()
     {
-        _sphereBuffer.Release();
-        _triangleBuffer.Release();
+        //_sphereBuffer.Release();
+        //_triangleBuffer.Release();
         _sdfBuffer.Release();
     }
 
@@ -136,7 +136,7 @@ public class RaytracingController : MonoBehaviour {
         for (int i = 0; i < SpheresMax; i++)
         {
             Sphere sphere = new Sphere();
-            sphere.material = new RaytraceMaterial();
+            sphere.material = new RayMarchMaterial();
 
             // Radius and radius
             sphere.radius = SphereRadius.x + UnityEngine.Random.value * (SphereRadius.y - SphereRadius.x);
@@ -179,7 +179,9 @@ public class RaytracingController : MonoBehaviour {
         //Debug.Log("Got transforms from SDF_Objects, transforms contains " + sdfs.Count + " sdfs!");
 
         // Assign to compute buffer, 36 is byte size of triangle struct in memory
-        _sdfBuffer = new ComputeBuffer(sdfs.Count, 36);
+        if(_sdfBuffer == null) {
+            _sdfBuffer = new ComputeBuffer(sdfs.Count, 36);
+        }
         _sdfBuffer.SetData(sdfs);
     }
 
@@ -222,7 +224,7 @@ public class RaytracingController : MonoBehaviour {
             for (int i = 0; i < SpheresMax; i++)
             {
                 Triangle tri = new Triangle();
-                tri.material = new RaytraceMaterial();
+                tri.material = new RayMarchMaterial();
                 float radius = SphereRadius.x + UnityEngine.Random.value * (SphereRadius.y - SphereRadius.x);
                 Vector2 randomPos = UnityEngine.Random.insideUnitCircle * SpherePlacementRadius;
                 Vector3 position = new Vector3(randomPos.x, radius, randomPos.y);
@@ -273,8 +275,8 @@ public class RaytracingController : MonoBehaviour {
         RayTraceShader.SetVector("_PixelOffset", new Vector2(UnityEngine.Random.value, UnityEngine.Random.value));
         Vector3 l = DirectionalLight.transform.forward;
         RayTraceShader.SetVector("_DirectionalLight", new Vector4(l.x, l.y, l.z, DirectionalLight.intensity));
-        RayTraceShader.SetBuffer(0, "_Spheres", _sphereBuffer);
-        RayTraceShader.SetBuffer(0, "_Triangles", _triangleBuffer);
+        //RayTraceShader.SetBuffer(0, "_Spheres", _sphereBuffer);
+        //RayTraceShader.SetBuffer(0, "_Triangles", _triangleBuffer);
         RayTraceShader.SetBuffer(0, "_SDFs", _sdfBuffer);
     }
 
@@ -289,7 +291,7 @@ public class RaytracingController : MonoBehaviour {
         int threadGroupAmountY = Mathf.CeilToInt(Screen.height / 8.0f);
         RayTraceShader.Dispatch(0, threadGroupAmountX, threadGroupAmountY, 1);
 
-        //show resulting texture
+        // show resulting texture
         // Blit the result texture to the screen
         if (_addMaterial == null)
             _addMaterial = new Material(Shader.Find("Hidden/AddShader"));
@@ -315,7 +317,7 @@ public class RaytracingController : MonoBehaviour {
             _targetTex.Create();
         }
 
-        if (_convergingTex == null || _convergingTex.width != Screen.width || _convergingTex.height != Screen.height)
+        if (_convergingTex == null || _convergingTex.width != Screen.width - 100 || _convergingTex.height != Screen.height)
         {
             //Restart with sample 0
             _currentSample = 0;
@@ -324,7 +326,7 @@ public class RaytracingController : MonoBehaviour {
             if (_convergingTex != null) _convergingTex.Release();
 
             //Create render texture for raytracing
-            _convergingTex = new RenderTexture(Screen.width, Screen.height, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
+            _convergingTex = new RenderTexture(Screen.width - 100, Screen.height, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
             _convergingTex.enableRandomWrite = true;
             _convergingTex.Create();
         }

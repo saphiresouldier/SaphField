@@ -55,7 +55,7 @@ public class GetSceneMeshes : Singleton<GetSceneMeshes> {
                 t.v3 = r.transform.localToWorldMatrix.MultiplyPoint3x4(vertices[triangles[i + 2]]);
                 t.normal = ComputeTriangleNormal(t.v1, t.v2, t.v3);
 
-                t.material = new RaytraceMaterial();  //TODO: Reuse materials
+                t.material = new RayMarchMaterial();  //TODO: Reuse materials
 
                 Material mat = r.GetComponent<Renderer>().sharedMaterial; ;
                 if (mat == null) Debug.Log("Error getting material!");
