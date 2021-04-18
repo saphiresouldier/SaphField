@@ -364,6 +364,16 @@ float opUnion(float d1, float d2)
   return min(d1, d2);
 }
 
+float opDifference(float d1, float d2)
+{
+  return min(d1, -d2);
+}
+
+float opIntersection(float d1, float d2)
+{
+  return max(d1, d2);
+}
+
 float opSmoothUnion(float d1, float d2, float k)
 {
   float h = max(k - abs(d1 - d2), 0.0);
@@ -375,7 +385,6 @@ float opSmoothUnion(float d1, float d2, float k)
 float GetMinSceneDistanceFromPoint(float3 p) {
   //define sphere here for now float4(position.xyz, radius)
   float4 sphere = float4(0.0, 1.0, 6.0, 1.0);
-  float4 sphere_2 = float4(2.0, 1.0, 6.0, 0.4);
   float plane_y = -0.0;
 
   // get distance from point to sphere
