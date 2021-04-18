@@ -42,13 +42,16 @@ public enum UPDATEFLAGS
 public class RaytracingController : MonoBehaviour {
 
     public ComputeShader RayTraceShader;
-    public Camera Camera;
+    public Camera MainCamera;
+    public Camera UICamera;
     public Texture SkyboxTex;
     public Light DirectionalLight;
+    public int UIAreaRight = 150;
 
-    public Vector2 SphereRadius = new Vector2(3.0f, 8.0f);
-    public uint SpheresMax = 100;
-    public float SpherePlacementRadius = 100.0f;
+    // TODO: remove
+    private Vector2 SphereRadius = new Vector2(3.0f, 8.0f);
+    private uint SpheresMax = 100;
+    private float SpherePlacementRadius = 100.0f;
 
     public int RandomSeed = 0;
 
@@ -77,7 +80,22 @@ public class RaytracingController : MonoBehaviour {
 
     private void Awake()
     {
-        if (Camera == null) Camera = Camera.main;
+        if (MainCamera == null) {
+            MainCamera = Camera.main;
+        }
+
+        // TODO create UIManager
+        //rescale cam rect for UI
+        Rect camRect = MainCamera.rect;
+        float relativeYSize = (Screen.width - (float)UIAreaRight) / Screen.width;
+        camRect.xMax = relativeYSize;
+        //Debug.Log("Screenwidth: " + Screen.width + " minus UIAreRight: " + UIAreaRight + " equals " + camRect.xMax);
+        MainCamera.rect = camRect;
+        camRect = UICamera.rect;
+        camRect.xMin = relativeYSize;
+        camRect.xMax = 1.0f;
+        //Debug.Log("Screenwidth: " + Screen.width + " minus UIAreRight: " + UIAreaRight + " equals " + camRect.xMax);
+        UICamera.rect = camRect;
 
         UnityEngine.Random.InitState(RandomSeed); 
     }
@@ -99,7 +117,7 @@ public class RaytracingController : MonoBehaviour {
 
     private void Update()
     {
-        DetectTransformChanged(Camera.transform);
+        DetectTransformChanged(MainCamera.transform);
         DetectTransformChanged(DirectionalLight.transform);
         foreach (SDF_Object s in GetSceneSDF.Instance.GetSceneSDFs())
         {
@@ -269,8 +287,8 @@ public class RaytracingController : MonoBehaviour {
 
     private void SetShaderParameters()
     {
-        RayTraceShader.SetMatrix("_CameraToWorld", Camera.cameraToWorldMatrix);
-        RayTraceShader.SetMatrix("_CameraInverseProjection", Camera.projectionMatrix.inverse);
+        RayTraceShader.SetMatrix("_CameraToWorld", MainCamera.cameraToWorldMatrix);
+        RayTraceShader.SetMatrix("_CameraInverseProjection", MainCamera.projectionMatrix.inverse);
         RayTraceShader.SetTexture(0, "_SkyboxTex", SkyboxTex);
         RayTraceShader.SetFloat("_SkyboxTexFactor", _skyboxMultiplicator);
         RayTraceShader.SetFloat("_Seed", UnityEngine.Random.value);
@@ -305,7 +323,7 @@ public class RaytracingController : MonoBehaviour {
 
     private void InitRenderTexture()
     {
-        if(_targetTex == null || _targetTex.width != Screen.width || _targetTex.height != Screen.height)
+        if(_targetTex == null || _targetTex.width != Screen.width - UIAreaRight || _targetTex.height != Screen.height)
         {
             //Restart with sample 0
             _currentSample = 0;
@@ -314,12 +332,12 @@ public class RaytracingController : MonoBehaviour {
             if (_targetTex != null) _targetTex.Release();
 
             //Create render texture for raytracing
-            _targetTex = new RenderTexture(Screen.width, Screen.height, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
+            _targetTex = new RenderTexture(Screen.width - UIAreaRight, Screen.height, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
             _targetTex.enableRandomWrite = true;
             _targetTex.Create();
         }
 
-        if (_convergingTex == null || _convergingTex.width != Screen.width - 100 || _convergingTex.height != Screen.height)
+        if (_convergingTex == null || _convergingTex.width != Screen.width - UIAreaRight || _convergingTex.height != Screen.height)
         {
             //Restart with sample 0
             _currentSample = 0;
@@ -328,7 +346,7 @@ public class RaytracingController : MonoBehaviour {
             if (_convergingTex != null) _convergingTex.Release();
 
             //Create render texture for raytracing
-            _convergingTex = new RenderTexture(Screen.width - 100, Screen.height, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
+            _convergingTex = new RenderTexture(Screen.width - UIAreaRight, Screen.height, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
             _convergingTex.enableRandomWrite = true;
             _convergingTex.Create();
         }
