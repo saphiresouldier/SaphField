@@ -43,10 +43,8 @@ public class RaytracingController : MonoBehaviour {
 
     public ComputeShader RayTraceShader;
     public Camera MainCamera;
-    public Camera UICamera;
     public Texture SkyboxTex;
     public Light DirectionalLight;
-    public int UIAreaRight = 150;
 
     // TODO: remove
     private Vector2 SphereRadius = new Vector2(3.0f, 8.0f);
@@ -83,19 +81,6 @@ public class RaytracingController : MonoBehaviour {
         if (MainCamera == null) {
             MainCamera = Camera.main;
         }
-
-        // TODO create UIManager
-        //rescale cam rect for UI
-        Rect camRect = MainCamera.rect;
-        float relativeYSize = (Screen.width - (float)UIAreaRight) / Screen.width;
-        camRect.xMax = relativeYSize;
-        //Debug.Log("Screenwidth: " + Screen.width + " minus UIAreRight: " + UIAreaRight + " equals " + camRect.xMax);
-        MainCamera.rect = camRect;
-        camRect = UICamera.rect;
-        camRect.xMin = relativeYSize;
-        camRect.xMax = 1.0f;
-        //Debug.Log("Screenwidth: " + Screen.width + " minus UIAreRight: " + UIAreaRight + " equals " + camRect.xMax);
-        UICamera.rect = camRect;
 
         UnityEngine.Random.InitState(RandomSeed); 
     }
@@ -323,7 +308,8 @@ public class RaytracingController : MonoBehaviour {
 
     private void InitRenderTexture()
     {
-        if(_targetTex == null || _targetTex.width != Screen.width - UIAreaRight || _targetTex.height != Screen.height)
+        int UIAreaRight = UIManager.Instance.UIAreaRight;
+        if (_targetTex == null || _targetTex.width != Screen.width - UIAreaRight || _targetTex.height != Screen.height)
         {
             //Restart with sample 0
             _currentSample = 0;
