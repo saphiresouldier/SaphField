@@ -62,6 +62,7 @@ public class RaytracingController : MonoBehaviour {
     private ComputeBuffer _sphereBuffer;
     private ComputeBuffer _triangleBuffer;
     private ComputeBuffer _sdfBuffer;
+    private int oldSDFCount = 0;
 
     private UPDATEFLAGS updateFlags = 0;
 
@@ -173,14 +174,15 @@ public class RaytracingController : MonoBehaviour {
         _sphereBuffer.SetData(spheres);
     }
 
-    private void SetupSDFScene()
+    public void SetupSDFScene()
     {
         List<SDF> sdfs = GetSceneSDFs();
         //Debug.Log("Got transforms from SDF_Objects, transforms contains " + sdfs.Count + " sdfs!");
 
         // Assign to compute buffer, 36 is byte size of triangle struct in memory
-        if(_sdfBuffer == null) {
+        if(_sdfBuffer == null || (sdfs.Count != oldSDFCount)) {
             _sdfBuffer = new ComputeBuffer(sdfs.Count, 36);
+            oldSDFCount = sdfs.Count;
         }
         _sdfBuffer.SetData(sdfs);
     }
