@@ -43,6 +43,7 @@ public class RaytracingController : MonoBehaviour {
 
     public ComputeShader RayTraceShader;
     public Camera MainCamera;
+    public Camera GizmoCamera;
     public Texture SkyboxTex;
     public Light DirectionalLight;
 
@@ -104,6 +105,7 @@ public class RaytracingController : MonoBehaviour {
     {
         DetectTransformChanged(MainCamera.transform);
         DetectTransformChanged(DirectionalLight.transform);
+        DetectTransformChanged(GizmoCamera.transform);
         foreach (SDF_Object s in GetSceneSDF.Instance.GetSceneSDFs())
         {
             DetectTransformChanged(s.transform, true); //TODO: optimize
@@ -121,6 +123,12 @@ public class RaytracingController : MonoBehaviour {
             RestartSampling();
             updateFlags &= (~UPDATEFLAGS.RESTART_SAMPLING);
         }
+    }
+
+    public void DebugUpdate()
+    {
+        SetupSDFScene();
+        RestartSampling();
     }
 
     private void DetectTransformChanged(Transform t, bool rebuildScene = false)
@@ -177,7 +185,7 @@ public class RaytracingController : MonoBehaviour {
         _sphereBuffer.SetData(spheres);
     }
 
-    public void SetupSDFScene()
+    private void SetupSDFScene()
     {
         List<SDF> sdfs = GetSceneSDFs();
         //Debug.Log("Got transforms from SDF_Objects, transforms contains " + sdfs.Count + " sdfs!");

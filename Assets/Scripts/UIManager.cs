@@ -11,9 +11,22 @@ public class UIManager : Singleton<UIManager>
     public Camera GizmoCamera;
 
     // Start is called before the first frame update
-    void Awake()
+    public override void Awake()
     {
-        // TODO create UIManager
+        base.Awake();
+        Cursor.visible = true;
+
+        SetCameras();
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+        
+    }
+
+    private void SetCameras()
+    {
         //rescale cam rect for UI
         Rect camRect = MainCamera.rect;
         float relativeYSize = (Screen.width - (float)UIAreaRight) / Screen.width;
@@ -26,11 +39,5 @@ public class UIManager : Singleton<UIManager>
         camRect.xMax = 1.0f;
         //Debug.Log("Screenwidth: " + Screen.width + " minus UIAreRight: " + UIAreaRight + " equals " + camRect.xMax);
         UICamera.rect = camRect;
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        
     }
 }
