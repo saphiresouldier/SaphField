@@ -37,6 +37,7 @@ public enum UPDATEFLAGS
     NONE = 0,
     RESTART_SAMPLING = 1,
     REBUILD_SCENE = 2
+    // TODO UPDATE_SCENE
 }
 
 public class RaytracingController : MonoBehaviour {
@@ -116,9 +117,10 @@ public class RaytracingController : MonoBehaviour {
             SetupSDFScene();
             RestartSampling();
             updateFlags &= (~UPDATEFLAGS.REBUILD_SCENE);
-            updateFlags &= (~UPDATEFLAGS.RESTART_SAMPLING);
+            updateFlags |= UPDATEFLAGS.RESTART_SAMPLING;
         }
-        else if (updateFlags.HasFlag(UPDATEFLAGS.RESTART_SAMPLING))
+        
+        if (updateFlags.HasFlag(UPDATEFLAGS.RESTART_SAMPLING))
         {
             RestartSampling();
             updateFlags &= (~UPDATEFLAGS.RESTART_SAMPLING);
@@ -133,11 +135,19 @@ public class RaytracingController : MonoBehaviour {
 
     private void DetectTransformChanged(Transform t, bool rebuildScene = false)
     {
-        if(t.hasChanged)
+        if (t.hasChanged)
         {
-            if (rebuildScene) updateFlags |= UPDATEFLAGS.REBUILD_SCENE;
-            else updateFlags |= UPDATEFLAGS.RESTART_SAMPLING;
+            if (rebuildScene)
+            {
+                updateFlags |= UPDATEFLAGS.REBUILD_SCENE;
+            }
+            else
+            {
+                updateFlags |= UPDATEFLAGS.RESTART_SAMPLING;
+            }
             t.hasChanged = false;
+
+            RestartSampling();
         }
     }
 
@@ -190,7 +200,7 @@ public class RaytracingController : MonoBehaviour {
         List<SDF> sdfs = GetSceneSDFs();
         //Debug.Log("Got transforms from SDF_Objects, transforms contains " + sdfs.Count + " sdfs!");
 
-        // Assign to compute buffer, 36 is byte size of triangle struct in memory
+        // Assign to compute buffer, 36 is byte size of sdf struct in memory
         if(_sdfBuffer == null || (sdfs.Count != oldSDFCount)) {
             _sdfBuffer = new ComputeBuffer(sdfs.Count, 36);
             oldSDFCount = sdfs.Count;
@@ -348,6 +358,7 @@ public class RaytracingController : MonoBehaviour {
 
     private void RestartSampling()
     {
+        //Debug.Log("RestartSampling()");
         _currentSample = 0;
     }
 }
