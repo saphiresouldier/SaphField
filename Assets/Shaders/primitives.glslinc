@@ -1,0 +1,9 @@
+﻿#ifndef PRIMITIVES_INC
+#define PRIMITIVES_INC
+
+float sphereDist(float3 p, float3 center, float radius)
+{
+	return length(p - center) - radius;
+}
+
+#endif // PRIMITIVES_INC

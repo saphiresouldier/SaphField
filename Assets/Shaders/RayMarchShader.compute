@@ -1,6 +1,10 @@
 ﻿// Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSMain
 
+//includes
+#include "Assets/Shaders/primitives.glslinc"
+#include "Assets/Shaders/operations.glslinc"
+
 // Create a RenderTexture with enableRandomWrite flag and set it
 // with cs.SetTexture
 RWTexture2D<float4> Result;
@@ -85,6 +89,10 @@ float sdot(float3 i, float3 o, float f = 1.0f)
 StructuredBuffer<Sphere> _Spheres;
 StructuredBuffer<Triangle> _Triangles;
 StructuredBuffer<SDF> _SDFs;
+
+// ---------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------
+
 
 Ray CreateRay(float3 origin, float3 direction)
 {
@@ -359,29 +367,6 @@ float3 Shade(inout Ray ray, RayHit hit)
 // ---------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------
 
-float opUnion(float d1, float d2)
-{
-  return min(d1, d2);
-}
-
-float opDifference(float d1, float d2)
-{
-  return min(d1, -d2);
-}
-
-float opIntersection(float d1, float d2)
-{
-  return max(d1, d2);
-}
-
-float opSmoothUnion(float d1, float d2, float k)
-{
-  float h = max(k - abs(d1 - d2), 0.0);
-  return min(d1, d2) - h * h*0.25 / k;
-  //float h = clamp( 0.5 + 0.5*(d2-d1)/k, 0.0, 1.0 );
-  //return mix( d2, d1, h ) - k*h*(1.0-h);
-}
-
 float GetMinSceneDistanceFromPoint(float3 p) {
   //define sphere here for now float4(position.xyz, radius)
   float4 sphere = float4(0.0, 1.0, 6.0, 1.0);
@@ -390,13 +375,13 @@ float GetMinSceneDistanceFromPoint(float3 p) {
   // get distance from point to sphere
   // return opUnion(length(point - sphere.xyz) - sphere.w, point.y + plane_y); // no blending
   // TODO
-  float dist = opSmoothUnion(length(p - sphere.xyz) - sphere.w, p.y + plane_y, 0.5); // hardcoded base
+  float dist = opSmoothUnion(sphereDist(p, sphere.xyz, sphere.w), p.y + plane_y, 0.5); // hardcoded base
 
   uint numSDFs, strideSDFs;
   _SDFs.GetDimensions(numSDFs, strideSDFs);
   for( uint i = 0; i < numSDFs; i++)
   {
-    float d = opSmoothUnion(length(p - _SDFs[i].pos) - 0.5, dist, 0.5); // TODO
+    float d = opSmoothUnion(sphereDist(p, _SDFs[i].pos, 0.5), dist, 0.5); // TODO
     if (d < dist) dist = d;
   }
 
