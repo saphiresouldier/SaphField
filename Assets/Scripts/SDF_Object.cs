@@ -4,17 +4,10 @@ using UnityEngine;
 
 public class SDF_Object : MonoBehaviour
 {
-    // Start is called before the first frame update
-    void Start()
-    {
-        
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
+    public OPTYPE opType = OPTYPE.UNION;
+    [Range(0.0f, 1.0f)]
+    public float SmoothRange = 0.5f;
+    public Color color = Color.gray;
 
     //private void OnMouseUpAsButton()
     //{

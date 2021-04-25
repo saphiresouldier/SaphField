@@ -16,11 +16,12 @@ public struct Triangle // 80
     public RayMarchMaterial material;
 };
 
-public struct SDF // 36
+// TODO: evaluate if directly using SDF_Object is possible here
+public struct SDF // 56
 {
-    public Vector3 pos, rot, scale;
-
-    // more coming soon
+    public Vector3 pos, rot, scale, color;
+    public float smoothRange;
+    public int opType;
 }
 
 public struct RayMarchMaterial // 32
@@ -38,6 +39,16 @@ public enum UPDATEFLAGS
     RESTART_SAMPLING = 1,
     REBUILD_SCENE = 2
     // TODO UPDATE_SCENE
+}
+
+public enum OPTYPE
+{
+    UNION = 0,
+    SUBTRACTION = 1,
+    INTERSECTION = 2,
+    SMOOTHUNION = 3,
+    SMOOTHSUBTRACTION = 4,
+    SMOOTHINTERSECTION = 5
 }
 
 public class RaytracingController : MonoBehaviour {
@@ -125,6 +136,8 @@ public class RaytracingController : MonoBehaviour {
             RestartSampling();
             updateFlags &= (~UPDATEFLAGS.RESTART_SAMPLING);
         }
+
+        DebugUpdate(); // TODO REMOVE ASAP
     }
 
     public void DebugUpdate()
@@ -200,9 +213,9 @@ public class RaytracingController : MonoBehaviour {
         List<SDF> sdfs = GetSceneSDFs();
         //Debug.Log("Got transforms from SDF_Objects, transforms contains " + sdfs.Count + " sdfs!");
 
-        // Assign to compute buffer, 36 is byte size of sdf struct in memory
+        // Assign to compute buffer, 56 is byte size of sdf struct in memory
         if(_sdfBuffer == null || (sdfs.Count != oldSDFCount)) {
-            _sdfBuffer = new ComputeBuffer(sdfs.Count, 36);
+            _sdfBuffer = new ComputeBuffer(sdfs.Count, 56);
             oldSDFCount = sdfs.Count;
         }
         _sdfBuffer.SetData(sdfs);
@@ -220,6 +233,9 @@ public class RaytracingController : MonoBehaviour {
             sdf.pos = sdf_objects[i].transform.position;
             sdf.rot = sdf_objects[i].transform.rotation.eulerAngles;
             sdf.scale = sdf_objects[i].transform.localScale;
+            sdf.color = new Vector3(sdf_objects[i].color.r, sdf_objects[i].color.g, sdf_objects[i].color.b);
+            sdf.smoothRange = sdf_objects[i].SmoothRange;
+            sdf.opType = (int)sdf_objects[i].opType;
 
             sdfs.Add(sdf);
         }

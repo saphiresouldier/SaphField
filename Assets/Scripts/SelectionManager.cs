@@ -26,8 +26,9 @@ public class SelectionManager : Singleton<SelectionManager>
 
 
     // Start is called before the first frame update
-    void Awake()
+    public override void Awake()
     {
+        base.Awake();
         gizmos = new RTG.ObjectTransformGizmo[(int)GizmoType.NONE];
 
         gizmos[(int)GizmoType.MOVE] = RTG.RTGizmosEngine.Get.CreateObjectMoveGizmo();

@@ -5,25 +5,33 @@ using UnityEngine.SceneManagement;
 
 public class GetSceneSDF : Singleton<GetSceneSDF> {
 
-    private SDF_Object[] _sdfs;
     [SerializeField]
-    private List<Transform> _sceneTransforms;
+    private SDF_Object[] _sdfs;
+    private bool updateScene = false;
+    private bool updateSceneProperties = false;
 
 	// Use this for initialization
 	public override void Awake () {
         base.Awake();
-
-        _sceneTransforms = GetSDFsCurrentScene();
 	}
 	
 	// Update is called once per frame
 	void Update () {
-		
+		if(updateScene)
+        {
+            GetSDFsCurrentScene();
+            updateScene = false;
+        }
 	}
 
     public void UpdateScene()
     {
-        _sceneTransforms = GetSDFsCurrentScene();
+        updateScene = true;
+    }
+
+   public void UpdateSceneProperties()
+    {
+        // TODO
     }
 
     public SDF_Object[] GetSceneSDFs()
@@ -31,31 +39,18 @@ public class GetSceneSDF : Singleton<GetSceneSDF> {
         return _sdfs;
     }
 
-    public List<Transform> GetSceneTransforms()
-    {
-        return _sceneTransforms;
-    }
+    //public List<Transform> GetSceneTransforms()
+    //{
+    //    return _sceneTransforms;
+    //}
 
-    private List<Transform> GetSDFsCurrentScene()
+    private void GetSDFsCurrentScene()
     {
         _sdfs = FindObjectsOfType<SDF_Object>(); // TODO: slow
 
-        List<Transform> transforms = new List<Transform>();
-
-        for(int i = 0; i < _sdfs.Length; i++)
+        foreach(SDF_Object s in _sdfs)
         {
-            Debug.Log("Found object with SDF_Object component: " + _sdfs[i].gameObject.name);
-
-            transforms.Add(_sdfs[i].transform);
+            Debug.Log("Found object with SDF_Object component: " + s.gameObject.name);
         }
-
-        return transforms;
-    }
-
-    private Vector3 ComputeTriangleNormal(Vector3 v1, Vector3 v2, Vector3 v3)
-    {
-        Vector3 v3v1 = v3 - v1;
-        Vector3 v2v1 = v2 - v1;
-        return Vector3.Cross(v3v1, v2v1).normalized;
     }
 }
