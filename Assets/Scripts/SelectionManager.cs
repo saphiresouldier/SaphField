@@ -42,8 +42,11 @@ public class SelectionManager : Singleton<SelectionManager>
 
     public void AddToCurrentSelection(GameObject selectedObject, bool expand = false)
     {
-        if(expand == false) { ClearSelection(); }
-        AddObjectToSelection(selectedObject);
+        if(gizmos[(int)currentGizmoType].Gizmo.IsHovered == false)
+        {
+            if (expand == false) { ClearSelection(); }
+            AddObjectToSelection(selectedObject);
+        }
     }
 
     public void ClearSelection()
