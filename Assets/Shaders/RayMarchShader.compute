@@ -367,6 +367,7 @@ float3 Shade(inout Ray ray, RayHit hit)
 // ---------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------
 
+// scene SDF
 float GetMinSceneDistanceFromPoint(float3 p) {
   //define sphere here for now float4(position.xyz, radius)
   float4 sphere = float4(0.0, 1.0, 6.0, 1.0);
@@ -375,18 +376,38 @@ float GetMinSceneDistanceFromPoint(float3 p) {
   // get distance from point to sphere
   // return opUnion(length(point - sphere.xyz) - sphere.w, point.y + plane_y); // no blending
   // TODO
-  float dist = opSmoothUnion(sphereDist(p, sphere.xyz, sphere.w), p.y + plane_y, 0.5); // hardcoded base
+  float dist = opSmoothUnion(signedDistanceSphere(p, sphere.xyz, sphere.w), p.y + plane_y, 0.5); // hardcoded base
 
   uint numSDFs, strideSDFs;
   _SDFs.GetDimensions(numSDFs, strideSDFs);
   for( uint i = 0; i < numSDFs; i++)
   {
-    float d = opSmoothUnion(sphereDist(p, _SDFs[i].pos, 0.5), dist, 0.5); // TODO
+    float d = opSmoothUnion(signedDistanceSphere(p, _SDFs[i].pos, 0.5), dist, 0.5); // TODO
     if (d < dist) dist = d;
   }
 
   return dist;
   // return opSmoothUnion(opSmoothUnion(length(p - sphere.xyz) - sphere.w, p.y + plane_y, 0.5), length(p - scene_sphere.xyz) - scene_sphere.w, 0.5); // blending
+}
+
+float3 calcNormalFast(float3 p)
+{
+  float dist = GetMinSceneDistanceFromPoint(p);
+  float2 epsilon = float2(0.0001, 0);
+  return normalize(dist - float3(GetMinSceneDistanceFromPoint(p - epsilon.xyy),
+                                 GetMinSceneDistanceFromPoint(p - epsilon.yxy),
+                                 GetMinSceneDistanceFromPoint(p - epsilon.yyx)));
+}
+
+// http://iquilezles.org/www/articles/normalsSDF/normalsSDF.htm
+float3 calcNormalEfficient(float3 p)
+{
+  const float ep = 0.0001;
+  float2 e = float2(1.0, -1.0)*0.5773;
+  return normalize( e.xyy*GetMinSceneDistanceFromPoint(p + e.xyy*ep) +
+                    e.yyx*GetMinSceneDistanceFromPoint(p + e.yyx*ep) +
+                    e.yxy*GetMinSceneDistanceFromPoint(p + e.yxy*ep) +
+                    e.xxx*GetMinSceneDistanceFromPoint(p + e.xxx*ep));
 }
 
 float Raymarch(Ray r)
@@ -424,11 +445,7 @@ float calcShading(float3 p)
   float3 light_dir = normalize(light_position - p);
 
   // calculate hitpoint normal (gradient of sdf at p)
-  float dist = GetMinSceneDistanceFromPoint(p);
-  float2 epsilon = float2(0.01, 0);
-  float3 normal = normalize(dist - float3(GetMinSceneDistanceFromPoint(p - epsilon.xyy),
-    GetMinSceneDistanceFromPoint(p - epsilon.yxy),
-    GetMinSceneDistanceFromPoint(p - epsilon.yyx)));
+  float3 normal = calcNormalEfficient(p);
 
   // calculate diffuse contribution
   float diffuse_contrib = clamp(dot(normal, light_dir), 0.0, 1.0);
