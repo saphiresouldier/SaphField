@@ -16,11 +16,11 @@ public class SDF_Object : MonoBehaviour
         
     }
 
-    private void OnMouseUpAsButton()
-    {
-        Debug.Log("Selected SDF: " + this.gameObject.name);
-        SelectionManager.Instance.AddToCurrentSelection(this.gameObject, false);
-    }
+    //private void OnMouseUpAsButton()
+    //{
+    //    Debug.Log("Selected SDF: " + this.gameObject.name);
+    //    SelectionManager.Instance.AddToCurrentSelection(this.gameObject, false);
+    //}
 
     private void OnEnable()
     {

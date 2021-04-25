@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-enum GizmoType
+public enum GizmoType
 {
     MOVE = 0,
     ROTATE = 1,
@@ -28,8 +28,6 @@ public class SelectionManager : Singleton<SelectionManager>
     // Start is called before the first frame update
     void Awake()
     {
-        //GameObject test = GameObject.Find("Sphere");
-        //AddObjectToSelection(test);
         gizmos = new RTG.ObjectTransformGizmo[(int)GizmoType.NONE];
 
         gizmos[(int)GizmoType.MOVE] = RTG.RTGizmosEngine.Get.CreateObjectMoveGizmo();
@@ -38,19 +36,8 @@ public class SelectionManager : Singleton<SelectionManager>
         gizmos[(int)GizmoType.UNIVERSAL] = RTG.RTGizmosEngine.Get.CreateObjectUniversalGizmo();
 
         disableGizmos();
-    }
 
-    // Update is called once per frame
-    void Update()
-    {
-        // TODO raycast selection? 
-
-
-        disableGizmos();
-        if(currentSelectedObjects.Count > 0)
-        {
-            UpdateGizmos();
-        }
+        currentGizmoType = GizmoType.MOVE;
     }
 
     public void AddToCurrentSelection(GameObject selectedObject, bool expand = false)
@@ -59,22 +46,55 @@ public class SelectionManager : Singleton<SelectionManager>
         AddObjectToSelection(selectedObject);
     }
 
+    public void ClearSelection()
+    {
+        if(gizmos[(int)currentGizmoType].Gizmo.IsHovered == false)
+        {
+            currentSelectedObjects.Clear();
+            disableGizmos();
+        }
+    }
+
+    public void SetGizmoType(GizmoType newType)
+    {
+        if(newType != currentGizmoType)
+        {
+            gizmos[(int)currentGizmoType].Gizmo.SetEnabled(false);
+            gizmos[(int)currentGizmoType].SetEnabled(false);
+            currentGizmoType = newType;
+            if(currentSelectedObjects.Count > 0)
+            {
+                gizmos[(int)currentGizmoType].SetEnabled(true);
+                gizmos[(int)currentGizmoType].Gizmo.SetEnabled(true);
+                gizmos[(int)currentGizmoType].SetTargetObject(currentSelectedObjects[0]);
+                gizmos[(int)currentGizmoType].SetTransformSpace(RTG.GizmoSpace.Local);
+            }
+        }
+    }
+
+    public GizmoType GetGizmoType()
+    {
+        return currentGizmoType;
+    }
+
     private void disableGizmos()
     {
-        foreach (RTG.ObjectTransformGizmo gizmo in gizmos)
+        for(int i = 0; i < (int)GizmoType.NONE; i++)
         {
-            gizmo.SetEnabled(false);
+            gizmos[i].Gizmo.SetEnabled(false);
+            gizmos[i].SetEnabled(false);
         }
     }
 
     private void UpdateGizmos()
     {
-        gizmos[(int)currentGizmoType].SetEnabled(true);
-    }
-
-    private void ClearSelection()
-    {
-        currentSelectedObjects.Clear();
+        if (currentSelectedObjects.Count > 0)
+        {
+            gizmos[(int)currentGizmoType].SetEnabled(true);
+            gizmos[(int)currentGizmoType].Gizmo.SetEnabled(true);
+            gizmos[(int)currentGizmoType].SetTargetObject(currentSelectedObjects[0]); // TODO: multi object selection
+            gizmos[(int)currentGizmoType].SetTransformSpace(RTG.GizmoSpace.Local);
+        }
     }
 
     private void AddObjectToSelection(GameObject selectedObject)
@@ -83,10 +103,10 @@ public class SelectionManager : Singleton<SelectionManager>
 
         //TODO Update AABB of selected objects and place gizmo in center
 
+        gizmos[(int)currentGizmoType].SetEnabled(true);
+        gizmos[(int)currentGizmoType].Gizmo.SetEnabled(true);
         gizmos[(int)currentGizmoType].SetTargetObject(selectedObject);
         //gizmos[(int)currentGizmoType].Gizmo.MoveGizmo.SetVertexSnapTargetObjects(new List<GameObject> { selectedObject });
         gizmos[(int)currentGizmoType].SetTransformSpace(RTG.GizmoSpace.Local);
-
-        Debug.Log("Added " + selectedObject.name + " to current selection!");
     }
 }
