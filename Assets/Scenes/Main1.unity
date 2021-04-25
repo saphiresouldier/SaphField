@@ -852,9 +852,9 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 887671113}
-        m_TargetAssemblyTypeName: RaytracingController, Assembly-CSharp
-        m_MethodName: DebugUpdate
+      - m_Target: {fileID: 1415059233}
+        m_TargetAssemblyTypeName: UIManager, Assembly-CSharp
+        m_MethodName: SaveScreenshot
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -1052,7 +1052,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Update
+  m_text: Screenshot
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -1346,6 +1346,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 71eb4c2fc4c128b4eba6b533897ce9e1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _sceneTransforms: []
 --- !u!114 &1415059236
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1431,7 +1432,7 @@ MonoBehaviour:
       _text: Scale gizmo
     - _tooltip: Allows you to change universal gizmo settings.
       _text: Universal gizmo
-    _activeTabIndex: 2
+    _activeTabIndex: 0
   _settings:
     _canBeDisplayed: 1
     _isExpanded: 1
@@ -1595,7 +1596,7 @@ MonoBehaviour:
       _numSphereBorderPoints: 100
       _color: {r: 0.8000001, g: 0.8000001, b: 0.8000001, a: 1}
       _hoveredColor: {r: 0.96470594, g: 0.9490197, b: 0.19607845, a: 1}
-    _screenCorner: 1
+    _screenCorner: 0
     _screenOffset: {x: 0, y: 0}
     _screenSize: 90
     _axesLabelTint: {r: 1, g: 1, b: 1, a: 1}

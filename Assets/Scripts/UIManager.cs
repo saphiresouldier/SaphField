@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using System;
 
 public class UIManager : Singleton<UIManager>
 {
@@ -23,6 +24,12 @@ public class UIManager : Singleton<UIManager>
     void Update()
     {
         
+    }
+
+    public void SaveScreenshot()
+    {
+        string path = "Assets/Screenshots/" + DateTime.Now.ToString("MM_dd_yyyy_HH_mm") + ".png";
+        ScreenCapture.CaptureScreenshot(path);
     }
 
     private void SetCameras()

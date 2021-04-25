@@ -6,6 +6,7 @@ using UnityEngine.SceneManagement;
 public class GetSceneSDF : Singleton<GetSceneSDF> {
 
     private SDF_Object[] _sdfs;
+    [SerializeField]
     private List<Transform> _sceneTransforms;
 
 	// Use this for initialization
