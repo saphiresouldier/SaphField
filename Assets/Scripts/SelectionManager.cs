@@ -35,7 +35,7 @@ public class SelectionManager : Singleton<SelectionManager>
         gizmos[(int)GizmoType.SCALE] = RTG.RTGizmosEngine.Get.CreateObjectScaleGizmo();
         gizmos[(int)GizmoType.UNIVERSAL] = RTG.RTGizmosEngine.Get.CreateObjectUniversalGizmo();
 
-        disableGizmos();
+        DisableGizmos();
 
         currentGizmoType = GizmoType.MOVE;
     }
@@ -51,7 +51,7 @@ public class SelectionManager : Singleton<SelectionManager>
         if(gizmos[(int)currentGizmoType].Gizmo.IsHovered == false)
         {
             currentSelectedObjects.Clear();
-            disableGizmos();
+            DisableGizmos();
         }
     }
 
@@ -59,15 +59,11 @@ public class SelectionManager : Singleton<SelectionManager>
     {
         if(newType != currentGizmoType)
         {
-            gizmos[(int)currentGizmoType].Gizmo.SetEnabled(false);
-            gizmos[(int)currentGizmoType].SetEnabled(false);
+            DisableGizmo(gizmos[(int)currentGizmoType]);
             currentGizmoType = newType;
             if(currentSelectedObjects.Count > 0)
             {
-                gizmos[(int)currentGizmoType].SetEnabled(true);
-                gizmos[(int)currentGizmoType].Gizmo.SetEnabled(true);
-                gizmos[(int)currentGizmoType].SetTargetObject(currentSelectedObjects[0]);
-                gizmos[(int)currentGizmoType].SetTransformSpace(RTG.GizmoSpace.Local);
+                EnableGizmo(gizmos[(int)currentGizmoType], currentSelectedObjects[0]);
             }
         }
     }
@@ -77,12 +73,11 @@ public class SelectionManager : Singleton<SelectionManager>
         return currentGizmoType;
     }
 
-    private void disableGizmos()
+    private void DisableGizmos()
     {
         for(int i = 0; i < (int)GizmoType.NONE; i++)
         {
-            gizmos[i].Gizmo.SetEnabled(false);
-            gizmos[i].SetEnabled(false);
+            DisableGizmo(gizmos[i]);
         }
     }
 
@@ -90,10 +85,7 @@ public class SelectionManager : Singleton<SelectionManager>
     {
         if (currentSelectedObjects.Count > 0)
         {
-            gizmos[(int)currentGizmoType].SetEnabled(true);
-            gizmos[(int)currentGizmoType].Gizmo.SetEnabled(true);
-            gizmos[(int)currentGizmoType].SetTargetObject(currentSelectedObjects[0]); // TODO: multi object selection
-            gizmos[(int)currentGizmoType].SetTransformSpace(RTG.GizmoSpace.Local);
+            EnableGizmo(gizmos[(int)currentGizmoType], currentSelectedObjects[0]);
         }
     }
 
@@ -103,10 +95,23 @@ public class SelectionManager : Singleton<SelectionManager>
 
         //TODO Update AABB of selected objects and place gizmo in center
 
-        gizmos[(int)currentGizmoType].SetEnabled(true);
-        gizmos[(int)currentGizmoType].Gizmo.SetEnabled(true);
-        gizmos[(int)currentGizmoType].SetTargetObject(selectedObject);
-        //gizmos[(int)currentGizmoType].Gizmo.MoveGizmo.SetVertexSnapTargetObjects(new List<GameObject> { selectedObject });
-        gizmos[(int)currentGizmoType].SetTransformSpace(RTG.GizmoSpace.Local);
+        EnableGizmo(gizmos[(int)currentGizmoType], selectedObject);
+    }
+
+    private void EnableGizmo(RTG.ObjectTransformGizmo gizmo, GameObject selection)
+    {
+        gizmo.SetEnabled(true);
+        gizmo.Gizmo.SetEnabled(true);
+        gizmo.SetTargetObject(selection); // TODO: multi object selection
+        gizmo.SetTransformSpace(RTG.GizmoSpace.Local);
+
+        // TODO
+        //gizmos[(int)currentGizmoType].Gizmo.MoveGizmo.SetVertexSnapTargetObjects(new List<GameObject> { selection });
+    }
+
+    private void DisableGizmo(RTG.ObjectTransformGizmo gizmo)
+    {
+        gizmo.Gizmo.SetEnabled(false);
+        gizmo.SetEnabled(false);
     }
 }
