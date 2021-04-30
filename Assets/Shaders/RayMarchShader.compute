@@ -385,35 +385,37 @@ float GetMinSceneDistanceFromPoint(float3 p) {
   uint numSDFs, strideSDFs;
   _SDFs.GetDimensions(numSDFs, strideSDFs);
   float d = MAX_DIST;
+  dist = distSphere;
   for( uint i = 0; i < numSDFs; i++)
   {
     
     if (_SDFs[i].opType == 0)
     {
-      d = opSmoothUnion(signedDistanceSphere(p, _SDFs[i].pos, 0.5), distSphere, _SDFs[i].smoothRange);
+      d = opSmoothUnion(signedDistanceSphere(p, _SDFs[i].pos, 0.5), dist, _SDFs[i].smoothRange);
+      dist = d;
     }
     else if (_SDFs[i].opType == 1)
     {
-      d = opSmoothSubtraction(signedDistanceSphere(p, _SDFs[i].pos, 0.5), distSphere, _SDFs[i].smoothRange);
+      d = opSmoothSubtraction(signedDistanceSphere(p, _SDFs[i].pos, 0.5), dist, _SDFs[i].smoothRange);
+      dist = d;
     }
     else if (_SDFs[i].opType == 2)
     {
-      d = opSmoothIntersection(signedDistanceSphere(p, _SDFs[i].pos, 0.5), distSphere, _SDFs[i].smoothRange);
+      d = opSmoothIntersection(signedDistanceSphere(p, _SDFs[i].pos, 0.5), dist, _SDFs[i].smoothRange);
+      dist = d;
     }
   }
-  dist = min(dist, d);
+
   //float d = opSmoothUnion(signedDistanceSphere(p, _SDFs[0].pos, 0.5), distSphere, _SDFs[0].smoothRange);
-  //if (d < dist) dist = d;
   //dist = min(dist, d);
 
   return dist;
-  // return opSmoothUnion(opSmoothUnion(length(p - sphere.xyz) - sphere.w, p.y + plane_y, 0.5), length(p - scene_sphere.xyz) - scene_sphere.w, 0.5); // blending
 }
 
 float3 calcNormalFast(float3 p)
 {
   float dist = GetMinSceneDistanceFromPoint(p);
-  float2 epsilon = float2(0.0001, 0);
+  float3 epsilon = float3(0.0001, 0.0001, 0.0001);
   return normalize(dist - float3(GetMinSceneDistanceFromPoint(p - epsilon.xyy),
                                  GetMinSceneDistanceFromPoint(p - epsilon.yxy),
                                  GetMinSceneDistanceFromPoint(p - epsilon.yyx)));

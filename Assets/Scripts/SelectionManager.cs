@@ -79,6 +79,11 @@ public class SelectionManager : Singleton<SelectionManager>
         return currentGizmoType;
     }
 
+    public void ToggleHighlightSelection()
+    {
+        highlightSelection = !highlightSelection;
+    }
+
     private void DisableGizmos()
     {
         for(int i = 0; i < (int)GizmoType.NONE; i++)
