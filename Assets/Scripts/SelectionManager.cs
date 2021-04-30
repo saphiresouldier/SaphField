@@ -13,6 +13,8 @@ public enum GizmoType
 
 public class SelectionManager : Singleton<SelectionManager>
 {
+    public bool highlightSelection = true;
+
     [SerializeField]
     private List<GameObject> currentSelectedObjects;
 
