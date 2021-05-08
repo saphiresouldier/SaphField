@@ -136,8 +136,6 @@ public class RaytracingController : MonoBehaviour {
             RestartSampling();
             updateFlags &= (~UPDATEFLAGS.RESTART_SAMPLING);
         }
-
-        DebugUpdate(); // TODO REMOVE ASAP
     }
 
     public void DebugUpdate()
