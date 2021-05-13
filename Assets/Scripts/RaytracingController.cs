@@ -319,7 +319,8 @@ public class RaytracingController : MonoBehaviour {
         RayTraceShader.SetFloat("_SkyboxTexFactor", _skyboxMultiplicator);
         RayTraceShader.SetFloat("_Seed", UnityEngine.Random.value);
         RayTraceShader.SetVector("_PixelOffset", new Vector2(UnityEngine.Random.value, UnityEngine.Random.value));
-        Vector3 l = DirectionalLight.transform.forward;
+        Vector3 l = DirectionalLight.transform.position;
+        // Vector3 l = DirectionalLight.transform.forward; // TODO directional lighting
         RayTraceShader.SetVector("_DirectionalLight", new Vector4(l.x, l.y, l.z, DirectionalLight.intensity));
         //RayTraceShader.SetBuffer(0, "_Spheres", _sphereBuffer);
         //RayTraceShader.SetBuffer(0, "_Triangles", _triangleBuffer);

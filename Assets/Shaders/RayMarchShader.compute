@@ -232,7 +232,7 @@ SDFReturn Raymarch(Ray r)
 float calcShading(float3 p)
 {
   // light source
-  float3 light_position = float3(-5.0, 5.0, 2.0);
+  float3 light_position = _DirectionalLight.xyz;
 
   // light direction
   float3 light_dir = normalize(light_position - p);
@@ -283,9 +283,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     float3 hitpoint = ray.origin + ray.direction * m.distance;
 
     // shade point
-    //float diffuse = calcShading(hitpoint);
-    float diffuse = 1.0;
-    //result = float3(diffuse, diffuse, diffuse);
+    float diffuse = calcShading(hitpoint);
     result = m.color * diffuse;
   }
   else
