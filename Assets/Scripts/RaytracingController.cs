@@ -209,7 +209,7 @@ public class RaytracingController : MonoBehaviour {
     private void SetupSDFScene()
     {
         List<SDF> sdfs = GetSceneSDFs();
-        //Debug.Log("Got transforms from SDF_Objects, transforms contains " + sdfs.Count + " sdfs!");
+        Debug.Log("Got transforms from SDF_Objects, transforms contains " + sdfs.Count + " sdfs!");
 
         // Assign to compute buffer, 56 is byte size of sdf struct in memory
         if(_sdfBuffer == null || (sdfs.Count != oldSDFCount)) {

@@ -36,41 +36,17 @@ struct Ray
 	float3 energy;
 };
 
-struct RaytraceMaterial
-{
-	float3 albedo;
-	float3 specular;
-	float smoothness;
-	float emission;
-};
-
-struct RayHit
-{
-	float3 position;
-	double distance;
-	float3 normal;
-	RaytraceMaterial mat;
-};
-
-struct Sphere
-{
-  float3 position;
-  float radius;
-	RaytraceMaterial mat;
-};
-
-struct Triangle
-{
-    float3 v1, v2, v3;
-    float3 normal; //flat shading will do for now, smooth shading requires vertex normals to be passed
-	RaytraceMaterial mat;
-};
-
 struct SDF
 {
   float3 pos, rot, scale, color;
   float smoothRange;
   int opType;
+};
+
+struct SDFReturn
+{
+  float distance;
+  float3 color;
 };
 
 float rand()
@@ -86,13 +62,7 @@ float sdot(float3 i, float3 o, float f = 1.0f)
 }
 
 //Structured Buffers
-StructuredBuffer<Sphere> _Spheres;
-StructuredBuffer<Triangle> _Triangles;
 StructuredBuffer<SDF> _SDFs;
-
-// ---------------------------------------------------------------------------------
-// ---------------------------------------------------------------------------------
-
 
 Ray CreateRay(float3 origin, float3 direction)
 {
@@ -101,6 +71,14 @@ Ray CreateRay(float3 origin, float3 direction)
     ray.direction = direction;
     ray.energy = float3(1.0f, 1.0f, 1.0f);
     return ray;
+}
+
+SDFReturn CreateSDFReturn(float distance, float3 color)
+{
+  SDFReturn ret;
+  ret.distance = distance;
+  ret.color = color;
+  return ret;
 }
 
 Ray CreateCameraRay(float2 uv)
@@ -116,41 +94,6 @@ Ray CreateCameraRay(float2 uv)
     direction = normalize(direction);
 
     return CreateRay(origin, direction);
-}
-
-RaytraceMaterial CreateMaterial()
-{
-	RaytraceMaterial mat;
-	mat.albedo = float3(0.4f, 0.4f, 0.4f);
-	mat.specular = float3(0.8f, 0.8f, 0.8f);
-	mat.smoothness = 0.5f;
-	mat.emission = 0.0f;
-
-	return mat;
-}
-
-RayHit CreateRayHit()
-{
-    RayHit hit;
-    hit.position = float3(0.0f, 0.0f, 0.0f);
-    //hit.distance = 1.#INF;
-    hit.distance = 1000000;
-    hit.normal = float3(0.0f, 0.0f, 0.0f);
-	  hit.mat = CreateMaterial();
-
-    return hit;
-}
-
-Triangle CreateTriangle()
-{
-    Triangle t;
-	  t.mat = CreateMaterial();
-    t.v1 = float3(1.0f, 1.0f, 3.0f);
-    t.v2 = float3(0.0f, 3.0f, 3.0f);
-    t.v3 = float3(-1.0f, 1.0f, 3.0f);
-    t.normal = float3(0.0f, 0.0f, -1.0f);
-
-    return t;
 }
 
 float3x3 GetTangentSpace(float3 normal)
@@ -178,197 +121,9 @@ float3 SampleHemisphere(float3 normal, float alpha)
 	return mul(tangentSpaceDir, GetTangentSpace(normal));
 }
 
-float energy(float3 color)
+// TODO update
+float GetSceneDistanceFromPoint(float3 p)
 {
-	return dot(color, 1.0f / 3.0f);
-}
-
-float SmoothnessToPhongAlpha(float smoothness)
-{
-	return pow(1000.0f, smoothness * smoothness);
-}
-
-void IntersectGroundPlane(Ray ray, inout RayHit bestHit)
-{
-//calculate groundplane hit distance
-    float t = -ray.origin.y / ray.direction.y;
-
-    if (t > 0 && t < bestHit.distance)
-    {
-      bestHit.distance = t;
-      bestHit.position = ray.origin + t * ray.direction;
-      bestHit.normal = float3(0.0f, 1.0f, 0.0f);
-      bestHit.mat.albedo = float3(0.4f, 0.4f, 0.4f);
-      bestHit.mat.specular = float3(0.1f, 0.1f, 0.1f);
-		  bestHit.mat.smoothness = 0.5f;
-		  bestHit.mat.emission = 0.0f;
-    }
-}
-
-void IntersectSphere(Ray ray, inout RayHit bestHit, Sphere sphere)
-{
-    // Calculate distance along the ray where the sphere is intersected
-    float3 d = ray.origin - sphere.position;
-    float p1 = -dot(ray.direction, d);
-    float p2sqr = p1 * p1 - dot(d, d) + sphere.radius * sphere.radius;
-    if (p2sqr < 0)
-	    return;
-    float p2 = sqrt(p2sqr);
-    float t = p1 - p2 > 0 ? p1 - p2 : p1 + p2;
-
-    if (t > 0 && t < bestHit.distance)
-    {
-	    bestHit.distance = t;
-	    bestHit.position = ray.origin + t * ray.direction;
-	    bestHit.normal = normalize(bestHit.position - sphere.position);
-        bestHit.mat.albedo = sphere.mat.albedo;
-        bestHit.mat.specular = sphere.mat.specular;
-		bestHit.mat.smoothness = sphere.mat.smoothness;
-		bestHit.mat.emission = sphere.mat.emission;
-    }
-}
-
-void IntersectTriangle(Ray ray, inout RayHit bestHit, Triangle tri)
-{
-   //algorithm used:  http://en.wikipedia.org/wiki/M%C3%B6ller%E2%80%93Trumbore_intersection_algorithm
-
-    float3 e1 = tri.v2 - tri.v1;
-    float3 e2 = tri.v3 - tri.v1;
-    float3 p = cross(ray.direction, e2); 
-    double det = dot(e1, p); 
-    if (det > -EPSILON && det < EPSILON)
-        return;
-        
-    double inv_det = 1.f / det;
-    float3 t = ray.origin - tri.v1;
-
-    double u = (dot(t, p) * inv_det); 
-    if (u < 0.f || u > 1.f)
-        return;
-
-    float3 q = cross(t, e1);
-    double v = dot(ray.direction, q) * inv_det;
-    if (v < 0.f || (u + v) > 1.f)
-        return;
-
-    double dist = dot(e2, q) * inv_det; 
-    if (dist > EPSILON && dist < bestHit.distance)
-    {
-      bestHit.distance = dist;
-      bestHit.normal = tri.normal;
-      bestHit.position = ray.origin - ray.direction * bestHit.distance; //implicit conversion double -> float happening here!
-      bestHit.mat.albedo = tri.mat.albedo;
-      bestHit.mat.specular = tri.mat.specular;
-		  bestHit.mat.smoothness = tri.mat.smoothness;
-		  bestHit.mat.emission = tri.mat.emission;
-    }
-}
-
-RayHit Trace(Ray ray)
-{
-    RayHit bestHit = CreateRayHit();
-
-    //intersect ground plane
-    IntersectGroundPlane(ray, bestHit);
-
-    //intersect debug triangle
-    //Triangle t = CreateTriangle();
-    //IntersectTriangle(ray, bestHit, t);
-
-    //intersect spheres
-    uint numSpheres, strideSpheres;
-    _Spheres.GetDimensions(numSpheres, strideSpheres);
-    for (uint i = 0; i < numSpheres; i++)
-    {
-       IntersectSphere(ray, bestHit, _Spheres[i]);
-    }
-
-    //intersect triangles
-    /*uint numTriangles, strideTriangles;
-    _Triangles.GetDimensions(numTriangles, strideTriangles);
-    for (uint j = 0; j < numTriangles; j++)
-    {
-       IntersectTriangle(ray, bestHit, _Triangles[j]);
-    }*/
-
-    return bestHit;
-}
-
-float3 Shade(inout Ray ray, RayHit hit)
-{
-    if (hit.distance < 1000000)
-    //if (hit.distance < 1.#INF)
-    {
-      float3 specular = hit.mat.specular;
-      float3 albedo = hit.mat.albedo;
-
-		  // Reflect the ray and multiply energy with specular reflection
-      //ray.origin = hit.position + hit.normal * 0.001f;
-        
-		  //witted phong
-		  //ray.direction = reflect(ray.direction, hit.normal);
-		  //ray.energy *= specular;
-
-		  //// Shadow test ray
-		  //bool shadow = false;
-		  //Ray shadowRay = CreateRay(hit.position + hit.normal * 0.001f, -1 * _DirectionalLight.xyz);
-		  //RayHit shadowHit = Trace(shadowRay);
-		  //if (shadowHit.distance != 1.#INF)
-		  //{
-		  //	return float3(0.0f, 0.0f, 0.0f);
-		  //}
-
-		  //// Return a diffuse-shaded color
-		  //return saturate(dot(hit.normal, _DirectionalLight.xyz) * -1) * _DirectionalLight.w * albedo;
-
-		  //pathtraced lambert + phong, optimized sampling
-		  albedo = min(1.0f - specular, albedo);
-		  float specularChance = energy(specular);
-		  float diffuseChance = energy(albedo);
-		  float sum = specularChance + diffuseChance;
-		  specularChance /= sum;
-		  diffuseChance /= sum;
-
-		  //Roulette select raypath
-		  float roulette = rand();
-		  if (roulette < specularChance)
-		  {
-			  //specular reflection
-			  float alpha = SmoothnessToPhongAlpha(hit.mat.smoothness);
-			  ray.origin = hit.position + hit.normal * 0.001f;
-			  ray.direction = SampleHemisphere(reflect(ray.direction, hit.normal), alpha);
-			  float f = (alpha + 2) / (alpha + 1);
-			  ray.energy *= (1.0f / specularChance) * specular * sdot(hit.normal, ray.direction, f);
-		  }
-		  else
-		  {
-			  //diffuse reflection
-			  ray.origin = hit.position + hit.normal * 0.001f;
-			  ray.direction = SampleHemisphere(hit.normal, 1.0f);
-			  ray.energy *= (1.0f / diffuseChance) * albedo;
-		  }
-		
-		return hit.mat.emission;
-
-    }
-    else
-    {
-        // Erase the ray's energy - the sky doesn't reflect anything
-        ray.energy = 0.0f;
-		    
-        // Write texture samples
-        // https://en.wikipedia.org/wiki/Spherical_coordinate_system#Coordinate_system_conversions
-        float theta = acos(ray.direction.y) / -PI;
-        float phi = atan2(ray.direction.x, -ray.direction.z) / -PI * 0.5f;
-        return _SkyboxTex.SampleLevel(sampler_SkyboxTex, float2(phi, theta), 0).xyz * _SkyboxTexFactor;
-	  }
-}
-
-// ---------------------------------------------------------------------------------
-// ---------------------------------------------------------------------------------
-
-// scene SDF
-float GetMinSceneDistanceFromPoint(float3 p) {
   float dist = MAX_DIST;
 
   //define sphere here for now float4(position.xyz, radius)
@@ -380,15 +135,14 @@ float GetMinSceneDistanceFromPoint(float3 p) {
   // TODO
   //float dist = opSmoothUnion(signedDistanceSphere(p, sphere.xyz, sphere.w), p.y + plane_y, 0.5); // hardcoded base
   float distSphere = signedDistanceSphere(p, sphere.xyz, sphere.w);
-  //dist = min(dist, distSphere);
 
   uint numSDFs, strideSDFs;
   _SDFs.GetDimensions(numSDFs, strideSDFs);
   float d = MAX_DIST;
   dist = distSphere;
-  for( uint i = 0; i < numSDFs; i++)
+  for (uint i = 0; i < numSDFs; i++)
   {
-    
+
     if (_SDFs[i].opType == 0)
     {
       d = opSmoothUnion(signedDistanceSphere(p, _SDFs[i].pos, 0.5), dist, _SDFs[i].smoothRange);
@@ -406,19 +160,65 @@ float GetMinSceneDistanceFromPoint(float3 p) {
     }
   }
 
-  //float d = opSmoothUnion(signedDistanceSphere(p, _SDFs[0].pos, 0.5), distSphere, _SDFs[0].smoothRange);
-  //dist = min(dist, d);
-
   return dist;
+}
+
+float GetShapeDistance(SDF sdf,float3 p)
+{
+  return signedDistanceSphere(p, sdf.pos.xyz, sdf.scale.x * 0.5f);
+}
+
+SDFReturn opCombine(float global_d, float local_d, float3 global_col, float3 local_col, int operation, float blend)
+{
+  SDFReturn r = CreateSDFReturn(global_d, global_col);
+
+  if (operation == 0)
+  {
+    r.distance = opSmoothUnion(global_d, local_d, blend);
+    // TODO: integrate with opSmoothUnion
+    float h = clamp(0.5 + 0.5*(local_d - global_d) / blend, 0.0, 1.0);
+    r.color = lerp(local_col, global_col, h);
+  }
+  else if (operation == 1)
+  {
+    r.distance = opSmoothSubtraction(global_d, local_d, blend);
+  }
+  else if (operation == 2)
+  {
+    r.distance = opSmoothIntersection(global_d, local_d, blend);
+  }
+
+  return r;
+}
+
+// scene SDF
+SDFReturn GetSceneDistanceAndColorFromPoint(float3 p) 
+{
+  uint numSDFs, strideSDFs;
+  _SDFs.GetDimensions(numSDFs, strideSDFs);
+
+  SDFReturn global_combined = CreateSDFReturn(MAX_DIST, float3(1.0, 1.0, 1.0));
+
+  for( uint i = 0; i < numSDFs; i++)
+  {
+    float local_dist = GetShapeDistance(_SDFs[i], p);
+    float3 local_col = _SDFs[i].color;
+
+    // TODO handle children+nesting+layers here
+
+    global_combined = opCombine(global_combined.distance, local_dist, global_combined.color, local_col, _SDFs[i].opType, _SDFs[i].smoothRange);
+  }
+
+  return global_combined;
 }
 
 float3 calcNormalFast(float3 p)
 {
-  float dist = GetMinSceneDistanceFromPoint(p);
+  float dist = GetSceneDistanceFromPoint(p);
   float3 epsilon = float3(0.0001, 0.0001, 0.0001);
-  return normalize(dist - float3(GetMinSceneDistanceFromPoint(p - epsilon.xyy),
-                                 GetMinSceneDistanceFromPoint(p - epsilon.yxy),
-                                 GetMinSceneDistanceFromPoint(p - epsilon.yyx)));
+  return normalize(dist - float3(GetSceneDistanceFromPoint(p - epsilon.xyy),
+                                 GetSceneDistanceFromPoint(p - epsilon.yxy),
+                                 GetSceneDistanceFromPoint(p - epsilon.yyx)));
 }
 
 // http://iquilezles.org/www/articles/normalsSDF/normalsSDF.htm
@@ -426,13 +226,13 @@ float3 calcNormalEfficient(float3 p)
 {
   const float ep = 0.0001;
   float2 e = float2(1.0, -1.0)*0.5773;
-  return normalize( e.xyy*GetMinSceneDistanceFromPoint(p + e.xyy*ep) +
-                    e.yyx*GetMinSceneDistanceFromPoint(p + e.yyx*ep) +
-                    e.yxy*GetMinSceneDistanceFromPoint(p + e.yxy*ep) +
-                    e.xxx*GetMinSceneDistanceFromPoint(p + e.xxx*ep));
+  return normalize( e.xyy*GetSceneDistanceFromPoint(p + e.xyy*ep) +
+                    e.yyx*GetSceneDistanceFromPoint(p + e.yyx*ep) +
+                    e.yxy*GetSceneDistanceFromPoint(p + e.yxy*ep) +
+                    e.xxx*GetSceneDistanceFromPoint(p + e.xxx*ep));
 }
 
-float Raymarch(Ray r)
+float RaymarchDist(Ray r)
 {
   float dist_0 = 0.0; //distance from origin
 
@@ -443,7 +243,7 @@ float Raymarch(Ray r)
     float3 t = r.origin + r.direction * dist_0;
 
     // get distance
-    float d = GetMinSceneDistanceFromPoint(t);
+    float d = GetSceneDistanceFromPoint(t);
 
     //advance/march along ray - spheretracing
     dist_0 += d;
@@ -456,6 +256,38 @@ float Raymarch(Ray r)
   }
 
   return MAX_DIST;
+}
+
+SDFReturn Raymarch(Ray r)
+{
+  SDFReturn ret;
+  ret.color = float3(1.0, 1.0, 0.0);
+
+  float dist_0 = 0.0; //distance from origin
+
+  // main raymarch loop
+  for (int i = 0; i < RAYMARCH_STEPS; i++) {
+
+    // march ray from origin in direction
+    float3 t = r.origin + r.direction * dist_0;
+
+    // get distance
+    SDFReturn r = GetSceneDistanceAndColorFromPoint(t);
+
+    //advance/march along ray - spheretracing
+    dist_0 += r.distance;
+
+    //compute sdf
+    if (dist_0 > MAX_DIST || r.distance < SDF_DIST) {
+      // found a hit
+      ret.distance = dist_0;
+      ret.color = r.color;
+      return ret;
+    }
+  }
+
+  ret.distance = MAX_DIST;
+  return ret;
 }
 
 float calcShading(float3 p)
@@ -476,10 +308,10 @@ float calcShading(float3 p)
   Ray shadowray;
   shadowray.origin = p + normal * SDF_DIST * 2.0;
   shadowray.direction = light_dir;
-  float shadow_fac = Raymarch(shadowray);
+  float shadow_ret = RaymarchDist(shadowray);
 
   // in shadow
-  if (shadow_fac < length(light_position - p)) diffuse_contrib *= 0.5;
+  if (shadow_ret < length(light_position - p)) diffuse_contrib *= 0.5;
 
   return diffuse_contrib;
 }
@@ -503,24 +335,19 @@ void CSMain(uint3 id : SV_DispatchThreadID)
 
 	//Trace and Shade
   float3 result = float3(0, 0, 0);
-  /*for (int i = 0; i < 8; i++)
-  {
-      RayHit hit = Trace(ray);
-      result += ray.energy * Shade(ray, hit);
-      if (!any(ray.energy))
-          break;
-  }*/
 
   // raymarching
-  float m = Raymarch(ray);
+  SDFReturn m = Raymarch(ray);
 
-  if (m < MAX_DIST) {
+  if (m.distance < MAX_DIST) {
     // calculate hit point
-    float3 hitpoint = ray.origin + ray.direction * m;
+    float3 hitpoint = ray.origin + ray.direction * m.distance;
 
     // shade point
-    float diffuse = calcShading(hitpoint);
-    result = float3(diffuse, diffuse, diffuse);
+    //float diffuse = calcShading(hitpoint);
+    float diffuse = 1.0;
+    //result = float3(diffuse, diffuse, diffuse);
+    result = m.color * diffuse;
   }
   else
   {
