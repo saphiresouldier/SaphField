@@ -121,48 +121,6 @@ float3 SampleHemisphere(float3 normal, float alpha)
 	return mul(tangentSpaceDir, GetTangentSpace(normal));
 }
 
-// TODO update
-float GetSceneDistanceFromPoint(float3 p)
-{
-  float dist = MAX_DIST;
-
-  //define sphere here for now float4(position.xyz, radius)
-  float4 sphere = float4(0.0, 1.0, 6.0, 1.0);
-  float plane_y = -0.0;
-
-  // get distance from point to sphere
-  // return opUnion(length(point - sphere.xyz) - sphere.w, point.y + plane_y); // no blending
-  // TODO
-  //float dist = opSmoothUnion(signedDistanceSphere(p, sphere.xyz, sphere.w), p.y + plane_y, 0.5); // hardcoded base
-  float distSphere = signedDistanceSphere(p, sphere.xyz, sphere.w);
-
-  uint numSDFs, strideSDFs;
-  _SDFs.GetDimensions(numSDFs, strideSDFs);
-  float d = MAX_DIST;
-  dist = distSphere;
-  for (uint i = 0; i < numSDFs; i++)
-  {
-
-    if (_SDFs[i].opType == 0)
-    {
-      d = opSmoothUnion(signedDistanceSphere(p, _SDFs[i].pos, 0.5), dist, _SDFs[i].smoothRange);
-      dist = d;
-    }
-    else if (_SDFs[i].opType == 1)
-    {
-      d = opSmoothSubtraction(signedDistanceSphere(p, _SDFs[i].pos, 0.5), dist, _SDFs[i].smoothRange);
-      dist = d;
-    }
-    else if (_SDFs[i].opType == 2)
-    {
-      d = opSmoothIntersection(signedDistanceSphere(p, _SDFs[i].pos, 0.5), dist, _SDFs[i].smoothRange);
-      dist = d;
-    }
-  }
-
-  return dist;
-}
-
 float GetShapeDistance(SDF sdf,float3 p)
 {
   return signedDistanceSphere(p, sdf.pos.xyz, sdf.scale.x * 0.5f);
@@ -174,10 +132,9 @@ SDFReturn opCombine(float global_d, float local_d, float3 global_col, float3 loc
 
   if (operation == 0)
   {
-    r.distance = opSmoothUnion(global_d, local_d, blend);
-    // TODO: integrate with opSmoothUnion
-    float h = clamp(0.5 + 0.5*(local_d - global_d) / blend, 0.0, 1.0);
-    r.color = lerp(local_col, global_col, h);
+    float4 o = opSmoothUnion(global_d, local_d, global_col, local_col, blend);
+    r.distance = o.x;
+    r.color = o.yzw;
   }
   else if (operation == 1)
   {
@@ -212,50 +169,26 @@ SDFReturn GetSceneDistanceAndColorFromPoint(float3 p)
   return global_combined;
 }
 
+// TODO faster shading computation rays without color computation
 float3 calcNormalFast(float3 p)
 {
-  float dist = GetSceneDistanceFromPoint(p);
+  float dist = GetSceneDistanceAndColorFromPoint(p).distance;
   float3 epsilon = float3(0.0001, 0.0001, 0.0001);
-  return normalize(dist - float3(GetSceneDistanceFromPoint(p - epsilon.xyy),
-                                 GetSceneDistanceFromPoint(p - epsilon.yxy),
-                                 GetSceneDistanceFromPoint(p - epsilon.yyx)));
+  return normalize(dist - float3(GetSceneDistanceAndColorFromPoint(p - epsilon.xyy).distance,
+                                 GetSceneDistanceAndColorFromPoint(p - epsilon.yxy).distance,
+                                 GetSceneDistanceAndColorFromPoint(p - epsilon.yyx).distance));
 }
 
+// TODO faster shading computation rays without color computation
 // http://iquilezles.org/www/articles/normalsSDF/normalsSDF.htm
 float3 calcNormalEfficient(float3 p)
 {
   const float ep = 0.0001;
   float2 e = float2(1.0, -1.0)*0.5773;
-  return normalize( e.xyy*GetSceneDistanceFromPoint(p + e.xyy*ep) +
-                    e.yyx*GetSceneDistanceFromPoint(p + e.yyx*ep) +
-                    e.yxy*GetSceneDistanceFromPoint(p + e.yxy*ep) +
-                    e.xxx*GetSceneDistanceFromPoint(p + e.xxx*ep));
-}
-
-float RaymarchDist(Ray r)
-{
-  float dist_0 = 0.0; //distance from origin
-
-  // main raymarch loop
-  for (int i = 0; i < RAYMARCH_STEPS; i++) {
-
-    // march ray from origin in direction
-    float3 t = r.origin + r.direction * dist_0;
-
-    // get distance
-    float d = GetSceneDistanceFromPoint(t);
-
-    //advance/march along ray - spheretracing
-    dist_0 += d;
-
-    //compute sdf
-    if (dist_0 > MAX_DIST || d < SDF_DIST) {
-      // found a hit
-      return dist_0;
-    }
-  }
-
-  return MAX_DIST;
+  return normalize( e.xyy*GetSceneDistanceAndColorFromPoint(p + e.xyy*ep).distance +
+                    e.yyx*GetSceneDistanceAndColorFromPoint(p + e.yyx*ep).distance +
+                    e.yxy*GetSceneDistanceAndColorFromPoint(p + e.yxy*ep).distance +
+                    e.xxx*GetSceneDistanceAndColorFromPoint(p + e.xxx*ep).distance);
 }
 
 SDFReturn Raymarch(Ray r)
@@ -308,7 +241,7 @@ float calcShading(float3 p)
   Ray shadowray;
   shadowray.origin = p + normal * SDF_DIST * 2.0;
   shadowray.direction = light_dir;
-  float shadow_ret = RaymarchDist(shadowray);
+  float shadow_ret = Raymarch(shadowray).distance; // TODO faster shadow computation rays without color computation
 
   // in shadow
   if (shadow_ret < length(light_position - p)) diffuse_contrib *= 0.5;
@@ -352,7 +285,8 @@ void CSMain(uint3 id : SV_DispatchThreadID)
   else
   {
     // background
-    result = float3(uv.xy, 1.0);
+    float y = (uv.y + 1.0f) / 2.0f;
+    result = float3(y, y, y);
   }
 
   Result[id.xy] = float4(result, 1);
