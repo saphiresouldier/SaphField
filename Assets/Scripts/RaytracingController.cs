@@ -17,11 +17,12 @@ public struct Triangle // 80
 };
 
 // TODO: evaluate if directly using SDF_Object is possible here
-public struct SDF // 56
+public struct SDF // 60
 {
-    public Vector3 pos, rot, scale, color;
-    public float smoothRange;
-    public int opType;
+    public Vector3 pos, rot, scale, color; // 12 * 4
+    public float smoothRange; //4
+    public int opType; //4
+    public int shape; //4
 }
 
 public struct RayMarchMaterial // 32
@@ -49,6 +50,13 @@ public enum OPTYPE
     SMOOTHUNION = 3,
     SMOOTHSUBTRACTION = 4,
     SMOOTHINTERSECTION = 5
+}
+
+public enum SHAPE
+{
+    SPHERE = 0, 
+    PLANE = 1,
+    CONE = 2
 }
 
 public class RaytracingController : MonoBehaviour {
@@ -211,9 +219,9 @@ public class RaytracingController : MonoBehaviour {
         List<SDF> sdfs = GetSceneSDFs();
         Debug.Log("Got transforms from SDF_Objects, transforms contains " + sdfs.Count + " sdfs!");
 
-        // Assign to compute buffer, 56 is byte size of sdf struct in memory
+        // Assign to compute buffer, 60 is byte size of sdf struct in memory
         if(_sdfBuffer == null || (sdfs.Count != oldSDFCount)) {
-            _sdfBuffer = new ComputeBuffer(sdfs.Count, 56);
+            _sdfBuffer = new ComputeBuffer(sdfs.Count, 60);
             oldSDFCount = sdfs.Count;
         }
         _sdfBuffer.SetData(sdfs);
@@ -234,6 +242,7 @@ public class RaytracingController : MonoBehaviour {
             sdf.color = new Vector3(sdf_objects[i].color.r, sdf_objects[i].color.g, sdf_objects[i].color.b);
             sdf.smoothRange = sdf_objects[i].SmoothRange;
             sdf.opType = (int)sdf_objects[i].opType;
+            sdf.shape = (int)sdf_objects[i].shape;
 
             sdfs.Add(sdf);
         }

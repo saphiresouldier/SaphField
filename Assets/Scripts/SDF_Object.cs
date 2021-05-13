@@ -5,6 +5,7 @@ using UnityEngine;
 public class SDF_Object : MonoBehaviour
 {
     public OPTYPE opType = OPTYPE.UNION;
+    public SHAPE shape = SHAPE.SPHERE;
     [Range(0.0f, 1.0f)]
     public float SmoothRange = 0.5f;
     public Color color = Color.gray;
